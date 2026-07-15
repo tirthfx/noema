@@ -6,6 +6,7 @@ import { chunkMarkdown, readVaultNote, walkMarkdownFiles } from './vault'
 
 export const EMBEDDING_MODEL = 'nvidia/llama-nemotron-embed-1b-v2'
 export const EMBEDDING_DIMENSION = 2048
+export const CHAT_MODEL = 'deepseek-ai/deepseek-v4-pro'
 const NIM_BASE_URL = 'https://integrate.api.nvidia.com/v1'
 const INDEX_VERSION = 1
 
@@ -208,7 +209,7 @@ export function getVaultIndex(vaultPath: string): VaultIndex {
 }
 
 export async function verifyChatAccess(): Promise<void> {
-  const response = await nimFetch('/chat/completions', { model: 'z-ai/glm-5.2', messages: [{ role: 'user', content: 'Reply with OK.' }], max_tokens: 1 })
+  const response = await nimFetch('/chat/completions', { model: CHAT_MODEL, messages: [{ role: 'user', content: 'Reply with OK.' }], max_tokens: 1 })
   if (response.status === 403) {
     throw new NimApiError('NIM chat access is forbidden. Enable Public API Endpoints for this personal organization in NVIDIA NIM before continuing.', 403)
   }

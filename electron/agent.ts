@@ -2,12 +2,12 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { AgentResult, Artifact, ArtifactResult, GroundedAnswerResult, Persona, ToolCallActivity } from '../shared/types'
 import { validateArtifact } from './citation-validator'
+import { CHAT_MODEL } from './index'
 import { listNotes } from './tools/list-notes'
 import { readNote } from './tools/read-note'
 import { searchNotes } from './tools/search-notes'
 
 const NIM_CHAT_URL = 'https://integrate.api.nvidia.com/v1/chat/completions'
-const MODEL = 'z-ai/glm-5.2'
 const MAX_TURNS = 8
 export const GROUNDING_THRESHOLD = 0.28
 
@@ -82,16 +82,23 @@ async function requestChat(messages: ChatMessage[]): Promise<{ payload?: ChatRes
       const response = await fetch(NIM_CHAT_URL, {
         method: 'POST',
         headers: { Authorization: `Bearer ${readApiKey()}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: MODEL, messages, tools, tool_choice: 'auto' }),
+        body: JSON.stringify({ model: CHAT_MODEL, messages, tools, tool_choice: 'auto' }),
         signal: AbortSignal.timeout(45_000)
       })
       const raw = await response.text()
       if (response.status === 403) return { error: 'NIM chat access is forbidden. Enable Public API Endpoints for this personal organization in NVIDIA NIM before continuing.' }
       if (!response.ok) {
-        lastError = `NIM chat request failed with HTTP ${response.status}.`
+        const detail = raw.trim().slice(0, 200)
+        lastError = `NIM chat request for ${CHAT_MODEL} failed with HTTP ${response.status}.${detail ? ` Response: ${detail}` : ''}`
+        if (response.status === 429) {
+          // NIM answers 429 both for genuine rate limits and for models this key cannot reach,
+          // so a persistent 429 on one model while others succeed means an access problem.
+          lastError += ' A repeated 429 on one model while other models succeed indicates this API key lacks access to it rather than a rate limit.'
+        }
         if (response.status >= 500 || response.status === 429) {
           const retryAfter = Number(response.headers.get('retry-after'))
-          await new Promise((resolve) => setTimeout(resolve, Number.isFinite(retryAfter) ? Math.min(retryAfter * 1_000, 15_000) : 5_000))
+          const backoffMs = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1_000, 15_000) : 5_000
+          await new Promise((resolve) => setTimeout(resolve, backoffMs))
           continue
         }
         return { error: lastError }
@@ -200,7 +207,20 @@ function artifactFrom(value: unknown): Artifact | null {
 }
 
 function parseModelJson(content: string): unknown {
-  return JSON.parse(content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
+  // Reasoning models emit chain-of-thought ahead of the answer and may fence the JSON
+  // anywhere in the message, so isolate the payload instead of parsing the whole reply.
+  let text = content.trim()
+  const reasoningEnd = text.lastIndexOf('</think>')
+  if (reasoningEnd !== -1) text = text.slice(reasoningEnd + '</think>'.length).trim()
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
+  if (fenced) {
+    text = fenced[1].trim()
+  } else {
+    const start = text.indexOf('{')
+    const end = text.lastIndexOf('}')
+    if (start !== -1 && end > start) text = text.slice(start, end + 1)
+  }
+  return JSON.parse(text)
 }
 
 export async function generateArtifact(vaultPath: string, topic: string, persona: Persona, onActivity: (activity: ToolCallActivity) => void): Promise<ArtifactResult> {
