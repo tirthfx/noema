@@ -171,7 +171,12 @@ export async function sendAgentMessage(vaultPath: string, userMessage: string, o
       if (!['search_notes', 'read_note', 'list_notes'].includes(call.function.name)) return malformed(response.raw ?? JSON.stringify(call))
       const tool = call.function.name as ToolCallActivity['tool']
       onActivity({ id: call.id, tool, input, status: 'running' })
-      const result = await executeTool(vaultPath, tool, input)
+      let result: unknown
+      try {
+        result = await executeTool(vaultPath, tool, input)
+      } catch (error) {
+        result = { error: error instanceof Error ? error.message : `Unable to execute ${tool}.` }
+      }
       onActivity({ id: call.id, tool, input, status: 'complete', summary: displaySummary(tool, result) })
       messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) })
     }

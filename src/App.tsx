@@ -3,6 +3,7 @@ import type { AgentResult, ToolCallActivity, VaultSelection } from '../shared/ty
 import ToolCallIndicator from './components/ToolCallIndicator'
 
 type ChatMessage = { id: string; role: 'user' | 'assistant'; content: string }
+type ChatEntry = { kind: 'message'; value: ChatMessage } | { kind: 'tool'; value: ToolCallActivity }
 type ChatError = AgentResult & { prompt: string }
 
 function WindowsControls() {
@@ -24,8 +25,7 @@ export default function App() {
   const [selecting, setSelecting] = useState(false)
   const [rebuilding, setRebuilding] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [activities, setActivities] = useState<ToolCallActivity[]>([])
+  const [entries, setEntries] = useState<ChatEntry[]>([])
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [chatError, setChatError] = useState<ChatError | null>(null)
@@ -33,9 +33,11 @@ export default function App() {
   useEffect(() => {
     window.noema.vault.getSaved().then(setVault).catch(() => setError('Noema could not read the previously selected vault. Choose it again to continue.')).finally(() => setLoading(false))
     return window.noema.agent.onToolCallActivity((activity) => {
-      setActivities((current) => {
-        const existing = current.findIndex((item) => item.id === activity.id)
-        return existing === -1 ? [...current, activity] : current.map((item) => item.id === activity.id ? activity : item)
+      setEntries((current) => {
+        const existing = current.findIndex((entry) => entry.kind === 'tool' && entry.value.id === activity.id)
+        return existing === -1
+          ? [...current, { kind: 'tool', value: activity }]
+          : current.map((entry) => entry.kind === 'tool' && entry.value.id === activity.id ? { kind: 'tool', value: activity } : entry)
       })
     })
   }, [])
@@ -54,12 +56,12 @@ export default function App() {
   async function send(prompt = draft): Promise<void> {
     const message = prompt.trim()
     if (!message || sending) return
-    setDraft(''); setSending(true); setChatError(null); setActivities([])
-    setMessages((current) => [...current, { id: crypto.randomUUID(), role: 'user', content: message }])
+    setDraft(''); setSending(true); setChatError(null)
+    setEntries((current) => [...current, { kind: 'message', value: { id: crypto.randomUUID(), role: 'user', content: message } }])
     try {
       const result = await window.noema.agent.sendMessage(message)
       const content = result.content
-      if (content) setMessages((current) => [...current, { id: crypto.randomUUID(), role: 'assistant', content }])
+      if (content) setEntries((current) => [...current, { kind: 'message', value: { id: crypto.randomUUID(), role: 'assistant', content } }])
       else setChatError({ ...result, prompt: message })
     } catch (reason) {
       setChatError({ prompt: message, error: reason instanceof Error ? reason.message : 'Noema could not send this message.', retryable: true })
@@ -77,9 +79,10 @@ export default function App() {
             <div className="chat-header"><p className="eyebrow">VAULT CONNECTED</p><p className="index-summary">{vault.indexStatus ? `${vault.indexStatus.indexedNotes} notes · ${vault.indexStatus.indexedChunks} chunks` : 'Index status unavailable'}</p></div>
             {vault.indexStatus?.error && <div className="index-error"><p className="error-copy" role="alert">{vault.indexStatus.error}</p><button className="secondary-action" onClick={() => void rebuildIndex()} disabled={rebuilding}>{rebuilding ? 'Rebuilding index…' : 'Retry indexing'}</button></div>}
             <div className="message-list" aria-live="polite">
-              {messages.length === 0 && activities.length === 0 && !chatError && <p className="chat-empty">Ask a question about the notes in this vault.</p>}
-              {messages.map((message) => <article className={`chat-message ${message.role}`} key={message.id}><p>{message.content}</p></article>)}
-              {activities.map((activity) => <ToolCallIndicator activity={activity} key={activity.id} />)}
+              {entries.length === 0 && !chatError && <p className="chat-empty">Ask a question about the notes in this vault.</p>}
+              {entries.map((entry) => entry.kind === 'message'
+                ? <article className={`chat-message ${entry.value.role}`} key={entry.value.id}><p>{entry.value.content}</p></article>
+                : <ToolCallIndicator activity={entry.value} key={entry.value.id} />)}
               {chatError && <div className="agent-error" role="alert"><p>{chatError.error}</p>{chatError.rawResponse && <pre>{chatError.rawResponse}</pre>}{chatError.retryable && <button className="secondary-action" onClick={() => void send(chatError.prompt)} disabled={sending}>Retry message</button>}</div>}
             </div>
             <form className="chat-input" onSubmit={onSubmit}><label className="sr-only" htmlFor="chat-message">Ask about your notes</label><textarea id="chat-message" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Ask about your notes…" rows={2} disabled={sending || Boolean(vault.indexStatus?.error)} /><button className="primary-action" type="submit" disabled={sending || !draft.trim() || Boolean(vault.indexStatus?.error)}>{sending ? 'Working…' : 'Send'}</button></form>

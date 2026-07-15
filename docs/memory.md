@@ -92,6 +92,8 @@ Mirrors `phases.md`. Check off acceptance criteria, not just "touched the code."
 
 **16 Jul 2026** — Phase 2 complete. Added the main-process NIM `z-ai/glm-5.2` tool-calling loop and exposed it through a narrow `agent:send-message` IPC handler; the renderer has no NIM access. The loop supplies only `search_notes`, `read_note`, and `list_notes`, executes all tool calls returned in a turn sequentially, appends each result as a `tool` message, and continues until a plain assistant response. Tool activity is sent over the existing restricted bridge and rendered inline by default, with the amber pulse limited to the in-flight portion of each call. A malformed response or tool-argument JSON is stopped at the parse boundary and shown with the raw response plus retry; NIM timeouts/5xx retry once then show a specific error. Strict TypeScript and an unpacked production build pass. No NIM-specific response quirk was observed during this build verification; Phase 3 can reuse this loop but must add citation validation before treating generated claims as grounded.
 
+**16 Jul 2026** — Phase 2 re-check. Corrected the chat stream so tool calls remain in their chronological position before the assistant answer and remain visible across later turns. Tool execution errors now become a completed tool result, which prevents an amber in-flight pulse from getting stuck and gives the model an explicit error result to handle. Strict TypeScript passes. A repeat unpacked-package attempt compiled and bundled successfully but could not complete the packaging download because the build environment could not resolve GitHub.
+
 ---
 
 ## Quick reference
