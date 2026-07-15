@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { AgentResult, ToolCallActivity } from '../shared/types'
+import type { AgentResult, Artifact, ArtifactResult, Persona, ToolCallActivity } from '../shared/types'
+import { validateArtifact } from './citation-validator'
 import { listNotes } from './tools/list-notes'
 import { readNote } from './tools/read-note'
 import { searchNotes } from './tools/search-notes'
@@ -182,4 +183,25 @@ export async function sendAgentMessage(vaultPath: string, userMessage: string, o
     }
   }
   return { error: 'The agent reached its tool-call limit before producing an answer. Retry your question.', retryable: true }
+}
+
+function artifactFrom(value: unknown): Artifact | null {
+  if (!value || typeof value !== 'object') return null
+  const draft = value as Partial<Artifact>
+  if (typeof draft.title !== 'string' || !Array.isArray(draft.claims) || !Array.isArray(draft.tensions)) return null
+  return draft as Artifact
+}
+
+export async function generateArtifact(vaultPath: string, topic: string, persona: Persona, onActivity: (activity: ToolCallActivity) => void): Promise<ArtifactResult> {
+  const tone = persona === 'Academic' ? 'formal and analytical' : persona === 'Socratic Critic' ? 'probing, careful, and explicit about uncertainty' : 'clear, direct, and accessible'
+  const prompt = `Create a genuine literature review about "${topic}" from this vault only. Use search_notes and read_note before writing. Your tone is ${tone}. Return ONLY valid JSON: {"title":string,"claims":[{"text":string,"citations":[{"path":string,"quote":string}]}],"tensions":[{"question":string,"sides":[{"text":string,"citations":[{"path":string,"quote":string}]}]}]}. Every claim and every tension side needs a citation whose quote is a verbatim passage from the named note. Do not add uncited claims. Identify genuine contradictions only when both sides are supported.`
+  const result = await sendAgentMessage(vaultPath, prompt, onActivity)
+  if (!result.content) return result
+  try {
+    const draft = artifactFrom(JSON.parse(result.content))
+    if (!draft) throw new Error('shape')
+    return { artifact: await validateArtifact(vaultPath, draft) }
+  } catch {
+    return { error: 'The model did not return a valid literature-review structure. Nothing was rendered as an artifact.', rawResponse: result.content, retryable: true }
+  }
 }

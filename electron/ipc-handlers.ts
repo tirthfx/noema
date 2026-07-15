@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron'
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { IndexStatus, VaultConfig, VaultSelection } from '../shared/types'
@@ -6,7 +6,8 @@ import { getVaultIndex } from './index'
 import { listNotes } from './tools/list-notes'
 import { readNote } from './tools/read-note'
 import { searchNotes } from './tools/search-notes'
-import { sendAgentMessage } from './agent'
+import { generateArtifact, sendAgentMessage } from './agent'
+import { resolveVaultPath } from './vault'
 
 const LAST_VAULT_FILE = 'last-vault.json'
 
@@ -80,6 +81,11 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     if (result.canceled || result.filePaths.length === 0) return null
     return saveVault(result.filePaths[0])
   })
+  ipcMain.handle('vault:reveal-note', async (_event, path: unknown) => {
+    if (typeof path !== 'string') return
+    const vault = await findSavedVault(); const fullPath = vault ? resolveVaultPath(vault.vaultPath, path) : null
+    if (fullPath) shell.showItemInFolder(fullPath)
+  })
   ipcMain.handle('index:status', async () => {
     const vault = await findSavedVault()
     return vault ? getVaultIndex(vault.vaultPath).getStatus() : null
@@ -112,6 +118,11 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     return sendAgentMessage(vault.vaultPath, message.trim(), (activity) => {
       event.sender.send('agent:tool-call-activity', activity)
     })
+  })
+  ipcMain.handle('agent:generate-artifact', async (event, topic: unknown, persona: unknown) => {
+    if (typeof topic !== 'string' || !topic.trim() || !['Academic', 'Socratic Critic', 'Plain-Language'].includes(persona as string)) throw new Error('Choose a topic and persona before generating a review.')
+    const vault = await findSavedVault(); if (!vault) throw new Error('Choose and index a vault before generating a review.')
+    return generateArtifact(vault.vaultPath, topic.trim(), persona as import('../shared/types').Persona, (activity) => event.sender.send('agent:tool-call-activity', activity))
   })
   ipcMain.handle('window:minimize', () => getWindow()?.minimize())
   ipcMain.handle('window:toggle-maximize', () => {

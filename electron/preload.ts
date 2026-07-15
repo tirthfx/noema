@@ -4,7 +4,8 @@ import type { NoemaApi } from '../shared/types'
 const noema: NoemaApi = {
   vault: {
     getSaved: () => ipcRenderer.invoke('vault:get-saved'),
-    choose: () => ipcRenderer.invoke('vault:choose')
+    choose: () => ipcRenderer.invoke('vault:choose'),
+    revealNote: (path) => ipcRenderer.invoke('vault:reveal-note', path)
   },
   index: {
     status: () => ipcRenderer.invoke('index:status'),
@@ -21,7 +22,8 @@ const noema: NoemaApi = {
       const handler = (_event: Electron.IpcRendererEvent, activity: Parameters<typeof listener>[0]) => listener(activity)
       ipcRenderer.on('agent:tool-call-activity', handler)
       return () => ipcRenderer.removeListener('agent:tool-call-activity', handler)
-    }
+    },
+    generateArtifact: (topic, persona) => ipcRenderer.invoke('agent:generate-artifact', topic, persona)
   },
   window: {
     minimize: () => ipcRenderer.invoke('window:minimize'),

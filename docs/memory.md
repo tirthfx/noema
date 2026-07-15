@@ -10,13 +10,13 @@ This is a clean restart. Full pre-restart history (naming journey, the original 
 
 **Restart date:** 16 Jul 2026
 **Deadline:** 21 Jul 2026, 5:00 PM PT / 22 Jul 2026, 5:30 AM IST
-**Current phase:** Phase 2 complete. Phase 3 (Notes → Artifact hero) is next.
+**Current phase:** Phase 3 complete. Phase 4 (Ask-your-knowledge) is next.
 
 ## Currently working on
 
 > Update this line every session. Example: `Phase 1 — resolving which NIM model to use for embeddings (architecture.md §6 open item).`
 
-Phase 3 — building the Notes → Artifact hero: validated citations, the Citation component, tensions, and persona tone controls.
+Phase 4 — building grounded Ask-your-knowledge with a clear no-match refusal path.
 
 ---
 
@@ -27,7 +27,7 @@ Mirrors `phases.md`. Check off acceptance criteria, not just "touched the code."
 - [x] **Phase 0** — Scaffold & skeleton (Electron+React+Vite+TS+Tailwind, security settings on from the start, folder picker, launches clean on macOS; Windows manual verification remains pending until a Windows runner is available)
 - [x] **Phase 1** — Vault ingestion & index (heading-based chunks, NIM embeddings, `.noema/index.json`, incremental re-index, read-only tools working; automated temporary-vault verification passed)
 - [x] **Phase 2** — Agent loop core (tool-calling loop, minimal chat UI, visible tool calls)
-- [ ] **Phase 3** — HERO: Notes → Artifact (citation validator, Citation component, Tensions section, persona picker)
+- [x] **Phase 3** — HERO: Notes → Artifact (citation validator, Citation component, Tensions section, persona picker)
 - [ ] **Phase 4** — Ask-your-knowledge (grounded Q&A, refusal path)
 - [ ] **Phase 5** — Capture & auto-file (text/URL capture, editable preview, approved writes, PDF if time allows)
 - [ ] **Phase 6** — Proactive recall + seed data (deterministic demo vault with a real tension and a real hidden connection)
@@ -58,6 +58,7 @@ Mirrors `phases.md`. Check off acceptance criteria, not just "touched the code."
 | D10 | Keep a small last-vault pointer in Electron's app-data directory; validate it against `<vault>/.noema/config.json` on launch | A config living only inside an unknown vault cannot be discovered on relaunch. The vault-local config remains the authoritative record; the pointer only locates it. |
 | D11 | Use NIM `nvidia/llama-nemotron-embed-1b-v2` embeddings at 2048 dimensions | Live catalog and endpoint verification confirmed availability. It is a multilingual, long-document retrieval model and explicitly supports distinct passage/query embeddings. |
 | D12 | Chunk notes by Markdown headings | Heading boundaries retain a note's argument and its local context better than arbitrary windows while keeping Phase 1 implementation transparent and dependency-free. |
+| D13 | Strip claims and tension sides with no verified citations | The artifact must never make unsupported prose appear grounded. A real-note excerpt replaces a near-matched model quote before render so every displayed popover is checkable. |
 
 *(Add D13+ here as new decisions get made — never renumber or delete existing ones.)*
 
@@ -93,6 +94,8 @@ Mirrors `phases.md`. Check off acceptance criteria, not just "touched the code."
 **16 Jul 2026** — Phase 2 complete. Added the main-process NIM `z-ai/glm-5.2` tool-calling loop and exposed it through a narrow `agent:send-message` IPC handler; the renderer has no NIM access. The loop supplies only `search_notes`, `read_note`, and `list_notes`, executes all tool calls returned in a turn sequentially, appends each result as a `tool` message, and continues until a plain assistant response. Tool activity is sent over the existing restricted bridge and rendered inline by default, with the amber pulse limited to the in-flight portion of each call. A malformed response or tool-argument JSON is stopped at the parse boundary and shown with the raw response plus retry; NIM timeouts/5xx retry once then show a specific error. Strict TypeScript and an unpacked production build pass. No NIM-specific response quirk was observed during this build verification; Phase 3 can reuse this loop but must add citation validation before treating generated claims as grounded.
 
 **16 Jul 2026** — Phase 2 re-check. Corrected the chat stream so tool calls remain in their chronological position before the assistant answer and remain visible across later turns. Tool execution errors now become a completed tool result, which prevents an amber in-flight pulse from getting stuck and gives the model an explicit error result to handle. Strict TypeScript passes. A repeat unpacked-package attempt compiled and bundled successfully but could not complete the packaging download because the build environment could not resolve GitHub.
+
+**16 Jul 2026** — Phase 3 complete. Added the Notes → Artifact literature-review flow on top of the Phase 2 read-only tool loop, with Academic, Socratic Critic, and Plain-Language tone controls. The main-process citation validator reads each cited vault note and strips any claim or tension side without an exact/near-exact source match; for near matches it substitutes an actual passage from the source note before the renderer receives it. The ArtifactView renders validated citation pills with hoverable source passages and a click action that reveals the source file in the OS file browser. Tensions require two validated sides and render with the specified warning border. Persona only alters the prompt tone; validation is unconditional in `generateArtifact`. Strict TypeScript and the Electron/Vite production bundle pass. Live NIM and manually contradictory-vault verification remain the next manual test before demo capture.
 
 ---
 
