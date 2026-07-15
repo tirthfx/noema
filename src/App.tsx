@@ -35,6 +35,7 @@ export default function App() {
   const [persona, setPersona] = useState<Persona>('Academic')
   const [artifact, setArtifact] = useState<Artifact | null>(null)
   const [generating, setGenerating] = useState(false)
+  const [retryArtifact, setRetryArtifact] = useState(false)
 
   useEffect(() => {
     window.noema.vault.getSaved().then(setVault).catch(() => setError('Noema could not read the previously selected vault. Choose it again to continue.')).finally(() => setLoading(false))
@@ -62,7 +63,7 @@ export default function App() {
   async function send(prompt = draft): Promise<void> {
     const message = prompt.trim()
     if (!message || sending) return
-    setDraft(''); setSending(true); setChatError(null)
+    setDraft(''); setSending(true); setChatError(null); setRetryArtifact(false)
     setEntries((current) => [...current, { kind: 'message', value: { id: crypto.randomUUID(), role: 'user', content: message } }])
     try {
       const result = await window.noema.agent.answerQuestion(message)
@@ -75,13 +76,14 @@ export default function App() {
   }
 
   function onSubmit(event: FormEvent<HTMLFormElement>): void { event.preventDefault(); void send() }
-  async function generateArtifact(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault(); if (!topic.trim() || generating) return
-    setGenerating(true); setChatError(null); setArtifact(null)
-    try { const result = await window.noema.agent.generateArtifact(topic, persona); if (result.artifact) setArtifact(result.artifact); else setChatError({ ...result, prompt: topic }) }
-    catch (reason) { setChatError({ prompt: topic, error: reason instanceof Error ? reason.message : 'Noema could not generate this review.', retryable: true }) }
+  async function runArtifact(): Promise<void> {
+    if (!topic.trim() || generating) return
+    setGenerating(true); setChatError(null); setArtifact(null); setRetryArtifact(false)
+    try { const result = await window.noema.agent.generateArtifact(topic, persona); if (result.artifact) setArtifact(result.artifact); else { setRetryArtifact(true); setChatError({ ...result, prompt: topic }) } }
+    catch (reason) { setRetryArtifact(true); setChatError({ prompt: topic, error: reason instanceof Error ? reason.message : 'Noema could not generate this review.', retryable: true }) }
     finally { setGenerating(false) }
   }
+  function generateArtifact(event: FormEvent<HTMLFormElement>): void { event.preventDefault(); void runArtifact() }
 
   return (
     <main className="app-shell">
@@ -91,14 +93,14 @@ export default function App() {
           <div className="chat-shell">
             <div className="chat-header"><p className="eyebrow">VAULT CONNECTED</p><p className="index-summary">{vault.indexStatus ? `${vault.indexStatus.indexedNotes} notes · ${vault.indexStatus.indexedChunks} chunks` : 'Index status unavailable'}</p></div>
             {vault.indexStatus?.error && <div className="index-error"><p className="error-copy" role="alert">{vault.indexStatus.error}</p><button className="secondary-action" onClick={() => void rebuildIndex()} disabled={rebuilding}>{rebuilding ? 'Rebuilding index…' : 'Retry indexing'}</button></div>}
-            <form className="artifact-controls" onSubmit={(event) => void generateArtifact(event)}><input value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="Literature-review topic" disabled={generating} /><select value={persona} onChange={(event) => setPersona(event.target.value as Persona)} disabled={generating}><option>Academic</option><option>Socratic Critic</option><option>Plain-Language</option></select><button className="secondary-action" disabled={generating || !topic.trim()}>{generating ? 'Contacting NIM…' : 'Generate review'}</button></form>
+            <form className="artifact-controls" onSubmit={generateArtifact}><input value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="Literature-review topic" disabled={generating} /><select value={persona} onChange={(event) => setPersona(event.target.value as Persona)} disabled={generating}><option>Academic</option><option>Socratic Critic</option><option>Plain-Language</option></select><button className="secondary-action" disabled={generating || !topic.trim()}>{generating ? 'Contacting NIM…' : 'Generate review'}</button></form>
             <div className="message-list" aria-live="polite">
               {entries.length === 0 && !chatError && <p className="chat-empty">Ask a question about the notes in this vault.</p>}
               {entries.map((entry) => entry.kind === 'message'
                 ? <article className={`chat-message ${entry.value.role}`} key={entry.value.id}><p>{entry.value.content}</p></article>
                 : entry.kind === 'tool' ? <ToolCallIndicator activity={entry.value} key={entry.value.id} /> : <AnswerView answer={entry.value} key={`answer-${entries.indexOf(entry)}`} />)}
               {artifact && <ArtifactView artifact={artifact} />}
-              {chatError && <div className="agent-error" role="alert"><p>{chatError.error}</p>{chatError.rawResponse && <pre>{chatError.rawResponse}</pre>}{chatError.retryable && <button className="secondary-action" onClick={() => void send(chatError.prompt)} disabled={sending}>Retry message</button>}</div>}
+              {chatError && <div className="agent-error" role="alert"><p>{chatError.error}</p>{chatError.rawResponse && <pre>{chatError.rawResponse}</pre>}{chatError.retryable && <button className="secondary-action" onClick={() => retryArtifact ? void runArtifact() : void send(chatError.prompt)} disabled={sending || generating}>{retryArtifact ? 'Retry review' : 'Retry message'}</button>}</div>}
             </div>
             <form className="chat-input" onSubmit={onSubmit}><label className="sr-only" htmlFor="chat-message">Ask about your notes</label><textarea id="chat-message" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Ask about your notes…" rows={2} disabled={sending || Boolean(vault.indexStatus?.error)} /><button className="primary-action" type="submit" disabled={sending || !draft.trim() || Boolean(vault.indexStatus?.error)}>{sending ? 'Working…' : 'Send'}</button></form>
           </div>

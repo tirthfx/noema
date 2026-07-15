@@ -89,7 +89,11 @@ async function requestChat(messages: ChatMessage[]): Promise<{ payload?: ChatRes
       if (response.status === 403) return { error: 'NIM chat access is forbidden. Enable Public API Endpoints for this personal organization in NVIDIA NIM before continuing.' }
       if (!response.ok) {
         lastError = `NIM chat request failed with HTTP ${response.status}.`
-        if (response.status >= 500 || response.status === 429) continue
+        if (response.status >= 500 || response.status === 429) {
+          const retryAfter = Number(response.headers.get('retry-after'))
+          await new Promise((resolve) => setTimeout(resolve, Number.isFinite(retryAfter) ? Math.min(retryAfter * 1_000, 15_000) : 5_000))
+          continue
+        }
         return { error: lastError }
       }
       try {
