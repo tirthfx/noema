@@ -5,7 +5,14 @@ import { resolve } from 'node:path'
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
-    build: { rollupOptions: { input: resolve('electron/main.ts') } }
+    build: {
+      rollupOptions: {
+        input: {
+          main: resolve('electron/main.ts'),
+          'phase1-smoke': resolve('electron/phase1-smoke.ts')
+        }
+      }
+    }
   },
   preload: {
     plugins: [externalizeDepsPlugin()],

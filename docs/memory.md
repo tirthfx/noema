@@ -10,13 +10,13 @@ This is a clean restart. Full pre-restart history (naming journey, the original 
 
 **Restart date:** 16 Jul 2026
 **Deadline:** 21 Jul 2026, 5:00 PM PT / 22 Jul 2026, 5:30 AM IST
-**Current phase:** Phase 0 complete. Phase 1 (Vault ingestion & index) is next.
+**Current phase:** Phase 1 complete. Phase 2 (Agent loop core) is next.
 
 ## Currently working on
 
 > Update this line every session. Example: `Phase 1 — resolving which NIM model to use for embeddings (architecture.md §6 open item).`
 
-Phase 1 — resolving the NIM embedding model and implementing vault ingestion and the persistent index.
+Phase 2 — building the minimal chat UI and NIM tool-calling loop on the read-only index tools.
 
 ---
 
@@ -25,7 +25,7 @@ Phase 1 — resolving the NIM embedding model and implementing vault ingestion a
 Mirrors `phases.md`. Check off acceptance criteria, not just "touched the code."
 
 - [x] **Phase 0** — Scaffold & skeleton (Electron+React+Vite+TS+Tailwind, security settings on from the start, folder picker, launches clean on macOS; Windows manual verification remains pending until a Windows runner is available)
-- [ ] **Phase 1** — Vault ingestion & index (chunking decided, embeddings wired, `.noema/index.json`, incremental re-index, read-only tools working)
+- [x] **Phase 1** — Vault ingestion & index (heading-based chunks, NIM embeddings, `.noema/index.json`, incremental re-index, read-only tools working; automated temporary-vault verification passed)
 - [ ] **Phase 2** — Agent loop core (tool-calling loop, minimal chat UI, visible tool calls)
 - [ ] **Phase 3** — HERO: Notes → Artifact (citation validator, Citation component, Tensions section, persona picker)
 - [ ] **Phase 4** — Ask-your-knowledge (grounded Q&A, refusal path)
@@ -37,8 +37,8 @@ Mirrors `phases.md`. Check off acceptance criteria, not just "touched the code."
 
 ## Open technical items (resolve before/during the phase noted)
 
-- [ ] **Embedding model** — which NIM model to use for embeddings; not yet pinned. Blocks Phase 1. Check the current NIM model catalog first; fall back to a pure-JS approach if nothing suitable (no native/compiled deps — see `rules.md`).
-- [ ] **Chunking strategy** — heading-based vs. fixed-token-window; decide once in Phase 1 and record the decision here, don't leave it ambiguous across sessions.
+- [x] **Embedding model** — `nvidia/llama-nemotron-embed-1b-v2`, 2048 dimensions. Confirmed against the live NIM catalog and `/v1/embeddings`; passages use `input_type: "passage"`, queries use `input_type: "query"`.
+- [x] **Chunking strategy** — heading-based. Each Markdown heading and its following body become one chunk, preserving the local claim/context relationship needed for research-note retrieval.
 
 ---
 
@@ -56,8 +56,10 @@ Mirrors `phases.md`. Check off acceptance criteria, not just "touched the code."
 | D8 | Both Windows and Mac installers built via GitHub Actions (`windows-latest` + `macos-latest` runners), not cross-compiled or built on borrowed hardware | Removes the single-developer-machine bottleneck for producing two native builds |
 | D9 | Persistence is two plain JSON files (`.noema/index.json`, `.noema/config.json`) — no embedded database | Vault-scale data doesn't need one; also avoids native-module cross-platform build risk |
 | D10 | Keep a small last-vault pointer in Electron's app-data directory; validate it against `<vault>/.noema/config.json` on launch | A config living only inside an unknown vault cannot be discovered on relaunch. The vault-local config remains the authoritative record; the pointer only locates it. |
+| D11 | Use NIM `nvidia/llama-nemotron-embed-1b-v2` embeddings at 2048 dimensions | Live catalog and endpoint verification confirmed availability. It is a multilingual, long-document retrieval model and explicitly supports distinct passage/query embeddings. |
+| D12 | Chunk notes by Markdown headings | Heading boundaries retain a note's argument and its local context better than arbitrary windows while keeping Phase 1 implementation transparent and dependency-free. |
 
-*(Add D11+ here as new decisions get made — never renumber or delete existing ones.)*
+*(Add D13+ here as new decisions get made — never renumber or delete existing ones.)*
 
 ## Blocked / needs user input
 
@@ -83,6 +85,8 @@ Mirrors `phases.md`. Check off acceptance criteria, not just "touched the code."
 **16 Jul 2026** — Docs restart session. All six docs (`prd.md`, `architecture.md`, `rules.md`, `phases.md`, `design.md`, `memory.md`) written from scratch against the new Electron/Windows+Mac pivot. Nothing built yet. Next session should start at Phase 0.
 
 **16 Jul 2026** — Phase 0 complete. Scaffolded Noema with Electron, React, Vite, strict TypeScript, Tailwind, and electron-builder. Applied `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, a renderer CSP, and a narrow typed `window.noema` bridge from the initial shell. Implemented native vault-folder selection, writes `<vault>/.noema/config.json`, and validates the stored vault on relaunch. Added all design tokens and bundled Inter, Source Serif 4, and JetBrains Mono locally. Confirmed TypeScript compilation, a production macOS arm64 package build, and foreground macOS Electron launch without startup errors. Windows launch/manual picker verification remains for a Windows machine or CI runner.
+
+**16 Jul 2026** — Phase 1 complete. Queried the live NIM catalog, selected `nvidia/llama-nemotron-embed-1b-v2` (2048 dimensions), and verified both its embeddings endpoint and `z-ai/glm-5.2` chat completions with HTTP 200. Implemented the main-process Markdown walker (skips `.noema/` and `.obsidian/`), heading-based chunking, plain-JSON incremental index, cosine search, and the three read-only tools behind the typed IPC bridge. NIM requests retry once on timeouts/5xx; chat 403s surface the Public API Endpoints hint. A temporary vault smoke test verified relevant search results, zero re-embeds when unchanged, selective re-embedding after editing one note, record removal after deletion, and corrupt-index rebuild without a crash. Next: Phase 2 only — chat UI and tool-calling loop.
 
 ---
 

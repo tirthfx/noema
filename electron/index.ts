@@ -1,0 +1,204 @@
+import { readFile, mkdir, writeFile } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import type { IndexRecord, IndexStatus, SearchMatch } from '../shared/types'
+import { chunkMarkdown, readVaultNote, walkMarkdownFiles } from './vault'
+
+export const EMBEDDING_MODEL = 'nvidia/llama-nemotron-embed-1b-v2'
+export const EMBEDDING_DIMENSION = 2048
+const NIM_BASE_URL = 'https://integrate.api.nvidia.com/v1'
+const INDEX_VERSION = 1
+
+interface StoredIndex {
+  version: number
+  model: string
+  dimension: number
+  records: IndexRecord[]
+}
+
+export class NimApiError extends Error {
+  constructor(message: string, readonly status?: number) {
+    super(message)
+    this.name = 'NimApiError'
+  }
+}
+
+function readApiKey(): string {
+  const key = process.env.NVIDIA_API_KEY
+  if (key) return key
+  try {
+    const localKey = readFileSync(join(process.cwd(), '.env'), 'utf8')
+      .match(/^NVIDIA_API_KEY=(.+)$/m)?.[1]?.trim()
+    if (localKey) return localKey
+  } catch {
+    // Production deployments should provide NVIDIA_API_KEY through the environment.
+  }
+  throw new NimApiError('NVIDIA_API_KEY is not configured in the main process.')
+}
+
+async function nimFetch(path: string, body: Record<string, unknown>): Promise<Response> {
+  let lastError: Error | null = null
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(`${NIM_BASE_URL}${path}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${readApiKey()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(45_000)
+      })
+      if (response.ok || (response.status < 500 && response.status !== 429)) return response
+      lastError = new NimApiError(`NIM request failed with HTTP ${response.status}.`, response.status)
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error('NIM request failed.')
+    }
+  }
+  throw new NimApiError(`NIM request failed after one retry: ${lastError?.message ?? 'unknown error'}`)
+}
+
+async function embed(text: string, inputType: 'passage' | 'query'): Promise<number[]> {
+  const response = await nimFetch('/embeddings', {
+    model: EMBEDDING_MODEL,
+    input: text,
+    input_type: inputType,
+    encoding_format: 'float',
+    truncate: 'NONE'
+  })
+  if (response.status === 403) {
+    throw new NimApiError('NIM denied the embedding request. Check this API key has access to NVIDIA Public API Endpoints.', 403)
+  }
+  if (!response.ok) throw new NimApiError(`NIM embedding request failed with HTTP ${response.status}.`, response.status)
+  const payload = await response.json() as { data?: Array<{ embedding?: unknown }> }
+  const vector = payload.data?.[0]?.embedding
+  if (!Array.isArray(vector) || vector.length !== EMBEDDING_DIMENSION || !vector.every((value) => typeof value === 'number')) {
+    throw new NimApiError('NIM returned an invalid embedding vector.')
+  }
+  return vector
+}
+
+function cosineSimilarity(left: number[], right: number[]): number {
+  let dot = 0
+  let leftMagnitude = 0
+  let rightMagnitude = 0
+  for (let index = 0; index < left.length; index += 1) {
+    dot += left[index] * right[index]
+    leftMagnitude += left[index] * left[index]
+    rightMagnitude += right[index] * right[index]
+  }
+  return leftMagnitude === 0 || rightMagnitude === 0 ? 0 : dot / (Math.sqrt(leftMagnitude) * Math.sqrt(rightMagnitude))
+}
+
+export class VaultIndex {
+  private records: IndexRecord[] = []
+  private loaded = false
+  private needsRebuild = false
+
+  constructor(readonly vaultPath: string) {}
+
+  private get indexPath(): string {
+    return join(this.vaultPath, '.noema', 'index.json')
+  }
+
+  async load(): Promise<void> {
+    if (this.loaded) return
+    this.loaded = true
+    try {
+      const raw = await readFile(this.indexPath, 'utf8')
+      const parsed = JSON.parse(raw) as StoredIndex
+      if (parsed.version !== INDEX_VERSION || parsed.model !== EMBEDDING_MODEL || parsed.dimension !== EMBEDDING_DIMENSION || !Array.isArray(parsed.records)) {
+        this.needsRebuild = true
+        this.records = []
+        return
+      }
+      this.records = parsed.records.filter(isIndexRecord)
+      this.needsRebuild = this.records.length !== parsed.records.length
+    } catch (error) {
+      this.needsRebuild = true
+      this.records = []
+    }
+  }
+
+  async refresh(): Promise<IndexStatus> {
+    await this.load()
+    const notes = await walkMarkdownFiles(this.vaultPath)
+    const noteMtimes = new Map(notes.map((note) => [note.path, note.mtime]))
+    const unchanged = new Set<string>()
+    for (const record of this.records) {
+      if (noteMtimes.get(record.notePath) === record.mtime) unchanged.add(record.notePath)
+    }
+    const stalePaths = new Set(notes.filter((note) => !unchanged.has(note.path)).map((note) => note.path))
+    const before = this.records.length
+    this.records = this.records.filter((record) => !stalePaths.has(record.notePath) && noteMtimes.has(record.notePath))
+    const removedChunks = before - this.records.length
+    let embeddedChunks = 0
+
+    for (const note of notes.filter((candidate) => stalePaths.has(candidate.path))) {
+      const content = await readVaultNote(this.vaultPath, note.path)
+      if (content === null) continue
+      for (const chunk of chunkMarkdown(content)) {
+        this.records.push({
+          notePath: note.path,
+          chunkId: chunk.id,
+          text: chunk.text,
+          embedding: await embed(chunk.text, 'passage'),
+          mtime: note.mtime
+        })
+        embeddedChunks += 1
+      }
+    }
+
+    await mkdir(join(this.vaultPath, '.noema'), { recursive: true })
+    const serialized: StoredIndex = { version: INDEX_VERSION, model: EMBEDDING_MODEL, dimension: EMBEDDING_DIMENSION, records: this.records }
+    await writeFile(this.indexPath, `${JSON.stringify(serialized, null, 2)}\n`, 'utf8')
+    this.needsRebuild = false
+    return this.status(embeddedChunks, removedChunks)
+  }
+
+  async search(query: string, topK = 5): Promise<SearchMatch[]> {
+    await this.load()
+    if (this.records.length === 0) return []
+    const queryEmbedding = await embed(query, 'query')
+    return this.records
+      .map((record) => ({ notePath: record.notePath, chunkId: record.chunkId, text: record.text, score: cosineSimilarity(queryEmbedding, record.embedding) }))
+      .sort((left, right) => right.score - left.score)
+      .slice(0, Math.max(1, Math.min(topK, 20)))
+  }
+
+  async getStatus(): Promise<IndexStatus> {
+    await this.load()
+    return this.status(0, 0)
+  }
+
+  private status(embeddedChunks: number, removedChunks: number): IndexStatus {
+    return {
+      indexedNotes: new Set(this.records.map((record) => record.notePath)).size,
+      indexedChunks: this.records.length,
+      embeddedChunks,
+      removedChunks,
+      needsRebuild: this.needsRebuild
+    }
+  }
+}
+
+function isIndexRecord(value: unknown): value is IndexRecord {
+  if (!value || typeof value !== 'object') return false
+  const record = value as Partial<IndexRecord>
+  return typeof record.notePath === 'string' && typeof record.chunkId === 'string' && typeof record.text === 'string' && typeof record.mtime === 'number' && Array.isArray(record.embedding) && record.embedding.length === EMBEDDING_DIMENSION && record.embedding.every((item) => typeof item === 'number')
+}
+
+const indexes = new Map<string, VaultIndex>()
+
+export function getVaultIndex(vaultPath: string): VaultIndex {
+  const existing = indexes.get(vaultPath)
+  if (existing) return existing
+  const index = new VaultIndex(vaultPath)
+  indexes.set(vaultPath, index)
+  return index
+}
+
+export async function verifyChatAccess(): Promise<void> {
+  const response = await nimFetch('/chat/completions', { model: 'z-ai/glm-5.2', messages: [{ role: 'user', content: 'Reply with OK.' }], max_tokens: 1 })
+  if (response.status === 403) {
+    throw new NimApiError('NIM chat access is forbidden. Enable Public API Endpoints for this personal organization in NVIDIA NIM before continuing.', 403)
+  }
+  if (!response.ok) throw new NimApiError(`NIM chat request failed with HTTP ${response.status}.`, response.status)
+}

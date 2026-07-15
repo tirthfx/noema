@@ -9,6 +9,7 @@
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build && electron-builder",
     "build:unpack": "npm run typecheck && electron-vite build && electron-builder --dir",
+    "smoke:index": "electron-vite build && node out/main/phase1-smoke.js",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.web.json"
   },
   "dependencies": {
