@@ -215,7 +215,10 @@ export async function answerQuestion(vaultPath: string, question: string, onActi
   const activityId = `grounding-${Date.now()}`
   onActivity({ id: activityId, tool: 'search_notes', input: { query: question, topK: 5 }, status: 'running' })
   let matches
-  try { matches = await searchNotes(vaultPath, question, 5) } catch (error) { return { error: error instanceof Error ? error.message : 'Noema could not search this vault.', retryable: true } }
+  try { matches = await searchNotes(vaultPath, question, 5) } catch (error) {
+    onActivity({ id: activityId, tool: 'search_notes', input: { query: question, topK: 5 }, status: 'complete', summary: 'search failed' })
+    return { error: error instanceof Error ? error.message : 'Noema could not search this vault.', retryable: true }
+  }
   onActivity({ id: activityId, tool: 'search_notes', input: { query: question, topK: 5 }, status: 'complete', summary: `${matches.length} matches` })
   if (!matches[0] || matches[0].score < GROUNDING_THRESHOLD) return { answer: { claims: [], refusal: true } }
   const prompt = `Answer this vault question: "${question}". Use search_notes and read_note as needed. Return ONLY valid JSON: {"claims":[{"text":string,"citations":[{"path":string,"quote":string}]}]}. Every claim needs at least one verbatim quote from its named vault note. Do not use general knowledge or include an unsupported claim.`

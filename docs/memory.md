@@ -102,6 +102,8 @@ Mirrors `phases.md`. Check off acceptance criteria, not just "touched the code."
 
 **16 Jul 2026** — Phase 4 complete. Plain chat now pre-searches the vault and refuses before model generation when its best cosine match is below `0.28`; the calm no-match state is distinct from an error. Covered questions go through the existing read-only tool loop and Phase 3 validator, then render the same Citation component used by artifacts. Unsupported answer claims are stripped just like artifact claims. Added `npm run smoke:answer`; its live NIM run passed both a cited-answer assertion and an unrelated-question refusal. The shared structured-output parser also accepts a fenced JSON wrapper from NIM without weakening validation. Next: Phase 5 only.
 
+**16 Jul 2026** — Phase 2–4 audit. Re-ran strict type checking and the live NIM smoke build paths. Fixed a Phase 4 error-path regression: a failed preliminary similarity search now emits a completed tool activity (`search failed`), so the amber pulse cannot remain active after failure.
+
 ---
 
 ## Quick reference
