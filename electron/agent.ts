@@ -83,7 +83,8 @@ async function requestChat(messages: ChatMessage[]): Promise<{ payload?: ChatRes
         method: 'POST',
         headers: { Authorization: `Bearer ${readApiKey()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: MODEL, messages, tools, tool_choice: 'auto' }),
-        signal: AbortSignal.timeout(45_000)
+        // Keep the two-attempt failure path visible within a reasonable UI wait.
+        signal: AbortSignal.timeout(20_000)
       })
       const raw = await response.text()
       if (response.status === 403) return { error: 'NIM chat access is forbidden. Enable Public API Endpoints for this personal organization in NVIDIA NIM before continuing.' }
