@@ -1,7 +1,8 @@
 import { readFile, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { IndexRecord, IndexStatus, SearchMatch } from '../shared/types'
+import type { IndexRecord, IndexStatus, RecallItem, SearchMatch } from '../shared/types'
+import { basename } from 'node:path'
 import { chunkMarkdown, readVaultNote, walkMarkdownFiles } from './vault'
 
 export const EMBEDDING_MODEL = 'nvidia/llama-nemotron-embed-1b-v2'
@@ -205,6 +206,13 @@ export class VaultIndex {
   async getStatus(): Promise<IndexStatus> {
     await this.load()
     return this.status(0, 0)
+  }
+
+  async recall(): Promise<RecallItem[]> {
+    await this.load()
+    const seen = new Set<string>()
+    return this.records.filter((record) => !seen.has(record.notePath) && Boolean(seen.add(record.notePath))).slice(0, 3)
+      .map((record) => ({ path: record.notePath, title: basename(record.notePath, '.md'), excerpt: record.text.replace(/^#.+\n?/, '').slice(0, 180) }))
   }
 
   private status(embeddedChunks: number, removedChunks: number): IndexStatus {

@@ -35,6 +35,7 @@ export interface NoteSummary {
   path: string
   title: string
 }
+export interface RecallItem extends NoteSummary { excerpt: string }
 
 export interface ToolCallActivity {
   id: string
@@ -88,6 +89,7 @@ export interface NoemaApi {
     propose: (input: CaptureInput) => Promise<ProposalResult>
     proposeLink: (fromPath: string, toPath: string, context: string) => Promise<ProposalResult>
   }
+  recall: { get: () => Promise<RecallItem[]> }
   index: {
     status: () => Promise<IndexStatus | null>
     rebuild: () => Promise<IndexStatus>

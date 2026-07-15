@@ -12,6 +12,7 @@ const noema: NoemaApi = {
     propose: (input) => ipcRenderer.invoke('capture:propose', input),
     proposeLink: (fromPath, toPath, context) => ipcRenderer.invoke('capture:propose-link', fromPath, toPath, context)
   },
+  recall: { get: () => ipcRenderer.invoke('recall:get') },
   index: {
     status: () => ipcRenderer.invoke('index:status'),
     rebuild: () => ipcRenderer.invoke('index:rebuild')

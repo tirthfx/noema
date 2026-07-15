@@ -10,13 +10,13 @@ This is a clean restart. Full pre-restart history (naming journey, the original 
 
 **Restart date:** 16 Jul 2026
 **Deadline:** 21 Jul 2026, 5:00 PM PT / 22 Jul 2026, 5:30 AM IST
-**Current phase:** Phase 5 complete. Phase 6 (Proactive recall + seed data) is next.
+**Current phase:** Phase 6 complete. Phase 7 (Corpus overview + polish) is next.
 
 ## Currently working on
 
 > Update this line every session. Example: `Phase 1 — resolving which NIM model to use for embeddings (architecture.md §6 open item).`
 
-Phase 6 — Proactive recall (F2) plus the deterministic seed vault.
+Phase 7 — Corpus overview and polish.
 
 ---
 
@@ -30,7 +30,7 @@ Mirrors `phases.md`. Check off acceptance criteria, not just "touched the code."
 - [x] **Phase 3** — HERO: Notes → Artifact (citation validator, Citation component, Tensions section, persona picker)
 - [x] **Phase 4** — Ask-your-knowledge (grounded Q&A, refusal path)
 - [x] **Phase 5** — Capture & auto-file (text/URL capture, editable preview, approved writes; **PDF capture cut — see D17**)
-- [ ] **Phase 6** — Proactive recall + seed data (deterministic demo vault with a real tension and a real hidden connection)
+- [x] **Phase 6** — Proactive recall + seed data (deterministic demo vault with a real tension and a real hidden connection)
 - [ ] **Phase 7** — Corpus overview + polish pass
 - [ ] **Phase 8** — Cross-platform packaging (electron-builder, both unsigned, GitHub Actions dual-runner build, README run instructions)
 - [ ] **Phase 9** — Demo video, README, submission
@@ -64,6 +64,7 @@ Mirrors `phases.md`. Check off acceptance criteria, not just "touched the code."
 | D15 | **A persistent NIM `429` means that model's quota is spent, not that the key lacks access or the code is broken. Keep `z-ai/glm-5.2` (D2 stands) and wait it out — do not swap models in response to a 429.** | Verified live this session: `glm-5.2` returned `429` on six consecutive probes while embeddings and four other chat models returned `200` on the same key. That evidence *looks* exactly like a per-model access restriction and was initially misdiagnosed as one, prompting a model swap to `deepseek-ai/deepseek-v4-pro`. Hours later the picture inverted — `glm-5.2` returned `200` after sitting unused, while `deepseek-v4-pro` returned `429` after this session's smoke runs burned through it, and did not recover across 100s of probing. NIM meters the free tier **per model**; a spent model 429s for a long window, then recovers on its own. The swap was reverted. Cost: most of a session. Next session: if chat 429s, check `/v1/models` and a second model before touching any code, then pause rather than swap. |
 | D16 | `link_notes` ships as a deterministic proposal builder invoked from the UI (explicit from-note, to-note, context), **not** yet as a model-callable tool, despite `architecture.md` §5 listing it in the tool table | Phase 5's requirement is the approval gate, which this satisfies exactly — and a deterministic trigger is demoable and testable without model latency or a model choosing note pairs at random. The agent originating link suggestions is F5 (Hidden connections), a Should-have; wiring `link_notes` into the loop's existing gated-tool path is a small add when F5 lands. The gate itself is already generic: `GATED_TOOLS` covers both names, and `tools/link-notes.ts` cannot write regardless of caller. |
 | D17 | **PDF capture cut from Phase 5** | `phases.md` marks it "only if time allows" and puts it behind text and URL in the cut order. Text and URL capture are both built and verified. Every JS-only PDF text extractor is a real dependency to run through the scope-creep test, and the session's remaining budget went to correcting D15's misdiagnosis. Text + URL fully satisfy F3's acceptance criteria. Revisit only after Phase 8 packaging is safe. |
+| D18 | Recall the first three indexed note paths, dismissible for the current renderer session | This deterministic index-backed heuristic guarantees a repeatable demo without model calls or recommendation-system complexity; cards are read-only. |
 
 *(Add D13+ here as new decisions get made — never renumber or delete existing ones.)*
 

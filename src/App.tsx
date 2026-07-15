@@ -1,9 +1,10 @@
 import { FormEvent, useEffect, useState } from 'react'
-import type { AgentResult, Artifact, CaptureKind, GroundedAnswer, NoteProposal, NoteSummary, Persona, ToolCallActivity, VaultSelection } from '../shared/types'
+import type { AgentResult, Artifact, CaptureKind, GroundedAnswer, NoteProposal, NoteSummary, Persona, RecallItem, ToolCallActivity, VaultSelection } from '../shared/types'
 import ToolCallIndicator from './components/ToolCallIndicator'
 import ArtifactView from './components/ArtifactView'
 import AnswerView from './components/AnswerView'
 import EditablePreview from './components/EditablePreview'
+import RecallCard from './components/RecallCard'
 
 type ChatMessage = { id: string; role: 'user' | 'assistant'; content: string }
 type ChatEntry = { kind: 'message'; value: ChatMessage } | { kind: 'tool'; value: ToolCallActivity } | { kind: 'answer'; value: GroundedAnswer }
@@ -47,9 +48,10 @@ export default function App() {
   const [linkFrom, setLinkFrom] = useState('')
   const [linkTo, setLinkTo] = useState('')
   const [linkContext, setLinkContext] = useState('')
+  const [recalls, setRecalls] = useState<RecallItem[]>([])
 
   useEffect(() => {
-    window.noema.vault.getSaved().then(setVault).catch(() => setError('Noema could not read the previously selected vault. Choose it again to continue.')).finally(() => setLoading(false))
+    window.noema.vault.getSaved().then(async (saved) => { setVault(saved); if (saved) setRecalls(await window.noema.recall.get()) }).catch(() => setError('Noema could not read the previously selected vault. Choose it again to continue.')).finally(() => setLoading(false))
     return window.noema.agent.onToolCallActivity((activity) => {
       setEntries((current) => {
         const existing = current.findIndex((entry) => entry.kind === 'tool' && entry.value.id === activity.id)
@@ -143,6 +145,7 @@ export default function App() {
           <div className="chat-shell">
             <div className="chat-header"><p className="eyebrow">VAULT CONNECTED</p><p className="index-summary">{vault.indexStatus ? `${vault.indexStatus.indexedNotes} notes · ${vault.indexStatus.indexedChunks} chunks` : 'Index status unavailable'}</p></div>
             {vault.indexStatus?.error && <div className="index-error"><p className="error-copy" role="alert">{vault.indexStatus.error}</p><button className="secondary-action" onClick={() => void rebuildIndex()} disabled={rebuilding}>{rebuilding ? 'Rebuilding index…' : 'Retry indexing'}</button></div>}
+            {recalls.length > 0 && <section className="recalls">{recalls.map((item) => <RecallCard item={item} key={item.path} onDismiss={() => setRecalls((current) => current.filter((card) => card.path !== item.path))} />)}</section>}
             <form className="artifact-controls" onSubmit={generateArtifact}><input value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="Literature-review topic" disabled={generating} /><select value={persona} onChange={(event) => setPersona(event.target.value as Persona)} disabled={generating}><option>Academic</option><option>Socratic Critic</option><option>Plain-Language</option></select><button className="secondary-action" disabled={generating || !topic.trim()}>{generating ? 'Contacting NIM…' : 'Generate review'}</button></form>
             <form className="capture-controls" onSubmit={(event) => void runCapture(event)}>
               <label className="sr-only" htmlFor="capture-kind">Capture type</label>

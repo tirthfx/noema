@@ -129,6 +129,10 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     if (!vault) throw new Error('Choose a vault before building an index.')
     return refreshIndex(vault.vaultPath)
   })
+  ipcMain.handle('recall:get', async () => {
+    const vault = await findSavedVault()
+    return vault ? getVaultIndex(vault.vaultPath).recall() : []
+  })
   ipcMain.handle('tools:search-notes', async (_event, query: unknown, topK?: unknown) => {
     if (typeof query !== 'string' || !query.trim()) return []
     const vault = await findSavedVault()
