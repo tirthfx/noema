@@ -83,8 +83,7 @@ async function requestChat(messages: ChatMessage[]): Promise<{ payload?: ChatRes
         method: 'POST',
         headers: { Authorization: `Bearer ${readApiKey()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: MODEL, messages, tools, tool_choice: 'auto' }),
-        // Keep the two-attempt failure path visible within a reasonable UI wait.
-        signal: AbortSignal.timeout(20_000)
+        signal: AbortSignal.timeout(45_000)
       })
       const raw = await response.text()
       if (response.status === 403) return { error: 'NIM chat access is forbidden. Enable Public API Endpoints for this personal organization in NVIDIA NIM before continuing.' }
@@ -130,12 +129,14 @@ function displaySummary(name: ToolCallActivity['tool'], result: unknown): string
 async function executeTool(vaultPath: string, name: string, input: Record<string, unknown>): Promise<unknown> {
   if (name === 'search_notes') {
     if (typeof input.query !== 'string' || !input.query.trim() || typeof input.topK !== 'number') return { error: 'search_notes requires a query string and numeric topK.' }
-    return searchNotes(vaultPath, input.query, Math.max(1, Math.min(20, Math.floor(input.topK))))
+    return searchNotes(vaultPath, input.query, Math.max(1, Math.min(8, Math.floor(input.topK))))
   }
   if (name === 'read_note') {
     if (typeof input.path !== 'string' || !input.path) return { error: 'read_note requires a note path.' }
     const note = await readNote(vaultPath, input.path)
-    return note ?? { error: `Note not found: ${input.path}` }
+    // Full notes remain available through read_note; bound the model transcript so a
+    // batch of large notes cannot starve the following completion.
+    return note ? note.slice(0, 12_000) : { error: `Note not found: ${input.path}` }
   }
   if (name === 'list_notes') {
     if (input.folder !== undefined && typeof input.folder !== 'string') return { error: 'list_notes folder must be a string.' }
