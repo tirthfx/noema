@@ -65,13 +65,13 @@ const tools = [
 ] as const
 
 function readApiKey(): string {
-  if (process.env.NVIDIA_API_KEY) return process.env.NVIDIA_API_KEY
   try {
     const key = readFileSync(join(process.cwd(), '.env'), 'utf8').match(/^NVIDIA_API_KEY=(.+)$/m)?.[1]?.trim()
     if (key) return key
   } catch {
-    // Production builds receive the key through their environment.
+    // Production builds may not ship a local .env file.
   }
+  if (process.env.NVIDIA_API_KEY) return process.env.NVIDIA_API_KEY
   throw new Error('NVIDIA_API_KEY is not configured in the main process.')
 }
 
