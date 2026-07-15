@@ -28,6 +28,7 @@ export default function App() {
   const [vault, setVault] = useState<VaultSelection | null>(null)
   const [loading, setLoading] = useState(true)
   const [selecting, setSelecting] = useState(false)
+  const [rebuilding, setRebuilding] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -49,6 +50,19 @@ export default function App() {
     }
   }
 
+  async function rebuildIndex(): Promise<void> {
+    if (!vault) return
+    setRebuilding(true)
+    try {
+      const indexStatus = await window.noema.index.rebuild()
+      setVault({ ...vault, indexStatus })
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Noema could not rebuild the vault index.')
+    } finally {
+      setRebuilding(false)
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="titlebar">
@@ -61,7 +75,19 @@ export default function App() {
             <p className="eyebrow">VAULT CONNECTED</p>
             <h1>Your research workspace is ready.</h1>
             <p className="vault-path">{vault.vaultPath}</p>
-            <p className="status-copy">Your vault index is ready. Agent tools begin in Phase 2.</p>
+            {vault.indexStatus?.error ? (
+              <>
+                <p className="error-copy" role="alert">{vault.indexStatus.error}</p>
+                <button className="primary-action" onClick={() => void rebuildIndex()} disabled={rebuilding}>
+                  {rebuilding ? 'Rebuilding index…' : 'Retry indexing'}
+                </button>
+              </>
+            ) : (
+              <p className="status-copy">
+                {vault.indexStatus ? `Indexed ${vault.indexStatus.indexedNotes} notes in ${vault.indexStatus.indexedChunks} chunks. ` : ''}
+                Agent tools begin in Phase 2.
+              </p>
+            )}
           </div>
         ) : (
           <div className="empty-state">

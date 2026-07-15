@@ -1,4 +1,4 @@
-import { readFile, mkdir, writeFile } from 'node:fs/promises'
+import { readFile, mkdir, rename, writeFile } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { IndexRecord, IndexStatus, SearchMatch } from '../shared/types'
@@ -119,38 +119,50 @@ export class VaultIndex {
 
   async refresh(): Promise<IndexStatus> {
     await this.load()
-    const notes = await walkMarkdownFiles(this.vaultPath)
-    const noteMtimes = new Map(notes.map((note) => [note.path, note.mtime]))
-    const unchanged = new Set<string>()
-    for (const record of this.records) {
-      if (noteMtimes.get(record.notePath) === record.mtime) unchanged.add(record.notePath)
-    }
-    const stalePaths = new Set(notes.filter((note) => !unchanged.has(note.path)).map((note) => note.path))
-    const before = this.records.length
-    this.records = this.records.filter((record) => !stalePaths.has(record.notePath) && noteMtimes.has(record.notePath))
-    const removedChunks = before - this.records.length
-    let embeddedChunks = 0
-
-    for (const note of notes.filter((candidate) => stalePaths.has(candidate.path))) {
-      const content = await readVaultNote(this.vaultPath, note.path)
-      if (content === null) continue
-      for (const chunk of chunkMarkdown(content)) {
-        this.records.push({
-          notePath: note.path,
-          chunkId: chunk.id,
-          text: chunk.text,
-          embedding: await embed(chunk.text, 'passage'),
-          mtime: note.mtime
-        })
-        embeddedChunks += 1
+    const originalRecords = this.records
+    const rebuildAll = this.needsRebuild
+    try {
+      const notes = await walkMarkdownFiles(this.vaultPath)
+      const noteMtimes = new Map(notes.map((note) => [note.path, note.mtime]))
+      const unchanged = new Set<string>()
+      if (!rebuildAll) {
+        for (const record of originalRecords) {
+          if (noteMtimes.get(record.notePath) === record.mtime) unchanged.add(record.notePath)
+        }
       }
-    }
+      const stalePaths = new Set(notes.filter((note) => rebuildAll || !unchanged.has(note.path)).map((note) => note.path))
+      const nextRecords = originalRecords.filter((record) => !stalePaths.has(record.notePath) && noteMtimes.has(record.notePath))
+      const removedChunks = originalRecords.length - nextRecords.length
+      let embeddedChunks = 0
 
-    await mkdir(join(this.vaultPath, '.noema'), { recursive: true })
-    const serialized: StoredIndex = { version: INDEX_VERSION, model: EMBEDDING_MODEL, dimension: EMBEDDING_DIMENSION, records: this.records }
-    await writeFile(this.indexPath, `${JSON.stringify(serialized, null, 2)}\n`, 'utf8')
-    this.needsRebuild = false
-    return this.status(embeddedChunks, removedChunks)
+      for (const note of notes.filter((candidate) => stalePaths.has(candidate.path))) {
+        const content = await readVaultNote(this.vaultPath, note.path)
+        if (content === null) continue
+        for (const chunk of chunkMarkdown(content)) {
+          nextRecords.push({
+            notePath: note.path,
+            chunkId: chunk.id,
+            text: chunk.text,
+            embedding: await embed(chunk.text, 'passage'),
+            mtime: note.mtime
+          })
+          embeddedChunks += 1
+        }
+      }
+
+      await mkdir(join(this.vaultPath, '.noema'), { recursive: true })
+      const serialized: StoredIndex = { version: INDEX_VERSION, model: EMBEDDING_MODEL, dimension: EMBEDDING_DIMENSION, records: nextRecords }
+      const temporaryIndexPath = `${this.indexPath}.tmp`
+      await writeFile(temporaryIndexPath, `${JSON.stringify(serialized, null, 2)}\n`, 'utf8')
+      await rename(temporaryIndexPath, this.indexPath)
+      this.records = nextRecords
+      this.needsRebuild = false
+      return this.status(embeddedChunks, removedChunks)
+    } catch (error) {
+      this.records = originalRecords
+      this.needsRebuild = true
+      throw error
+    }
   }
 
   async search(query: string, topK = 5): Promise<SearchMatch[]> {

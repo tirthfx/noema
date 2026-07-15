@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron'
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { IndexStatus, VaultConfig, VaultSelection } from '../shared/types'
 import { getVaultIndex } from './index'
@@ -23,8 +23,7 @@ async function readJson<T>(path: string): Promise<T | null> {
 
 async function isReadableDirectory(path: string): Promise<boolean> {
   try {
-    await access(path)
-    return true
+    return (await stat(path)).isDirectory()
   } catch {
     return false
   }
@@ -43,9 +42,9 @@ async function refreshIndex(vaultPath: string): Promise<IndexStatus> {
   try {
     return await getVaultIndex(vaultPath).refresh()
   } catch (error) {
+    const existing = await getVaultIndex(vaultPath).getStatus()
     return {
-      indexedNotes: 0,
-      indexedChunks: 0,
+      ...existing,
       embeddedChunks: 0,
       removedChunks: 0,
       needsRebuild: true,
@@ -55,12 +54,15 @@ async function refreshIndex(vaultPath: string): Promise<IndexStatus> {
 }
 
 async function getSavedVault(): Promise<VaultSelection | null> {
+  const vault = await findSavedVault()
+  return vault ? { ...vault, indexStatus: await refreshIndex(vault.vaultPath) } : null
+}
+
+async function findSavedVault(): Promise<VaultSelection | null> {
   const pointer = await readJson<VaultConfig>(lastVaultPointerPath())
   if (!pointer || !(await isReadableDirectory(pointer.vaultPath))) return null
   const config = await readJson<VaultConfig>(join(pointer.vaultPath, '.noema', 'config.json'))
-  return config?.vaultPath === pointer.vaultPath
-    ? { vaultPath: pointer.vaultPath, indexStatus: await refreshIndex(pointer.vaultPath) }
-    : null
+  return config?.vaultPath === pointer.vaultPath ? { vaultPath: pointer.vaultPath } : null
 }
 
 export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
@@ -78,24 +80,28 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     return saveVault(result.filePaths[0])
   })
   ipcMain.handle('index:status', async () => {
-    const vault = await getSavedVault()
-    return vault?.indexStatus ?? null
+    const vault = await findSavedVault()
+    return vault ? getVaultIndex(vault.vaultPath).getStatus() : null
   })
   ipcMain.handle('index:rebuild', async () => {
-    const vault = await getSavedVault()
+    const vault = await findSavedVault()
     if (!vault) throw new Error('Choose a vault before building an index.')
     return refreshIndex(vault.vaultPath)
   })
-  ipcMain.handle('tools:search-notes', async (_event, query: string, topK?: number) => {
-    const vault = await getSavedVault()
-    return vault && query.trim() ? searchNotes(vault.vaultPath, query, topK) : []
+  ipcMain.handle('tools:search-notes', async (_event, query: unknown, topK?: unknown) => {
+    if (typeof query !== 'string' || !query.trim()) return []
+    const vault = await findSavedVault()
+    const safeTopK = typeof topK === 'number' && Number.isFinite(topK) ? topK : 5
+    return vault ? searchNotes(vault.vaultPath, query, safeTopK) : []
   })
-  ipcMain.handle('tools:read-note', async (_event, path: string) => {
-    const vault = await getSavedVault()
+  ipcMain.handle('tools:read-note', async (_event, path: unknown) => {
+    if (typeof path !== 'string') return null
+    const vault = await findSavedVault()
     return vault ? readNote(vault.vaultPath, path) : null
   })
-  ipcMain.handle('tools:list-notes', async (_event, folder?: string) => {
-    const vault = await getSavedVault()
+  ipcMain.handle('tools:list-notes', async (_event, folder?: unknown) => {
+    if (folder !== undefined && typeof folder !== 'string') return []
+    const vault = await findSavedVault()
     return vault ? listNotes(vault.vaultPath, folder) : []
   })
   ipcMain.handle('window:minimize', () => getWindow()?.minimize())
