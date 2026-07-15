@@ -13,6 +13,18 @@ function WindowsControls() {
 }
 
 export default function App() {
+  if (!window.noema) {
+    return (
+      <main className="app-shell browser-notice">
+        <div>
+          <p className="eyebrow">ELECTRON REQUIRED</p>
+          <h1>Open Noema from the desktop app.</h1>
+          <p className="status-copy">This renderer has no filesystem or native-dialog access when opened directly in a browser.</p>
+        </div>
+      </main>
+    )
+  }
+
   const [vault, setVault] = useState<VaultSelection | null>(null)
   const [loading, setLoading] = useState(true)
   const [selecting, setSelecting] = useState(false)
@@ -49,7 +61,7 @@ export default function App() {
             <p className="eyebrow">VAULT CONNECTED</p>
             <h1>Your research workspace is ready.</h1>
             <p className="vault-path">{vault.vaultPath}</p>
-            <p className="status-copy">Indexing and agent tools begin in Phase 1.</p>
+            <p className="status-copy">Your vault index is ready. Agent tools begin in Phase 2.</p>
           </div>
         ) : (
           <div className="empty-state">

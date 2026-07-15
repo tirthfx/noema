@@ -8,7 +8,7 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: {
-          main: resolve('electron/main.ts'),
+          index: resolve('electron/main.ts'),
           'phase1-smoke': resolve('electron/phase1-smoke.ts')
         }
       }
@@ -16,7 +16,9 @@ export default defineConfig({
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
-    build: { rollupOptions: { input: resolve('electron/preload.ts') } }
+    build: {
+      lib: { entry: resolve('electron/preload.ts'), formats: ['cjs'] }
+    }
   },
   renderer: {
     root: '.',

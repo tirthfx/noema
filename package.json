@@ -4,7 +4,7 @@
   "private": true,
   "description": "An autonomous knowledge agent for Obsidian vaults.",
   "type": "module",
-  "main": "out/main/main.js",
+  "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build && electron-builder",
