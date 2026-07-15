@@ -9,7 +9,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve('electron/main.ts'),
-          'phase1-smoke': resolve('electron/phase1-smoke.ts')
+          'phase1-smoke': resolve('electron/phase1-smoke.ts'),
+          'phase3-smoke': resolve('electron/phase3-smoke.ts')
         }
       }
     }

@@ -97,6 +97,8 @@ Mirrors `phases.md`. Check off acceptance criteria, not just "touched the code."
 
 **16 Jul 2026** — Phase 3 complete. Added the Notes → Artifact literature-review flow on top of the Phase 2 read-only tool loop, with Academic, Socratic Critic, and Plain-Language tone controls. The main-process citation validator reads each cited vault note and strips any claim or tension side without an exact/near-exact source match; for near matches it substitutes an actual passage from the source note before the renderer receives it. The ArtifactView renders validated citation pills with hoverable source passages and a click action that reveals the source file in the OS file browser. Tensions require two validated sides and render with the specified warning border. Persona only alters the prompt tone; validation is unconditional in `generateArtifact`. Strict TypeScript and the Electron/Vite production bundle pass. Live NIM and manually contradictory-vault verification remain the next manual test before demo capture.
 
+**16 Jul 2026** — Phase 3 live verification. Added and ran `npm run smoke:artifact` against a temporary two-note vault containing a real contradiction. The NIM-backed run indexed the vault, generated an artifact through the tool loop, and passed assertions for at least one validated claim, no uncited rendered claims, and at least one validated tension. The visible citation hover/click and the three persona variations remain desktop UI checks for the next demo pass.
+
 ---
 
 ## Quick reference
