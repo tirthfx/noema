@@ -1,5 +1,5 @@
-import { readdir, readFile, stat } from 'node:fs/promises'
-import { relative, resolve, sep } from 'node:path'
+import { readdir, readFile, stat, mkdir, writeFile } from 'node:fs/promises'
+import { relative, resolve, sep, dirname } from 'node:path'
 
 export interface VaultNote {
   path: string
@@ -47,6 +47,32 @@ export async function readVaultNote(vaultPath: string, notePath: string): Promis
   } catch {
     return null
   }
+}
+
+export async function writeVaultNote(vaultPath: string, notePath: string, content: string): Promise<void> {
+  const fullPath = resolveVaultPath(vaultPath, notePath)
+  if (!fullPath || !fullPath.toLowerCase().endsWith('.md')) throw new Error('The proposed path must stay inside the vault and end in .md.')
+  await mkdir(dirname(fullPath), { recursive: true })
+  await writeFile(fullPath, content, 'utf8')
+}
+
+/**
+ * Plain-language fs failure text for the EditablePreview flow (rules.md §5). Always keeps
+ * the real OS code and message — the write is never retried silently or swallowed.
+ */
+export function describeWriteFailure(error: unknown, notePath: string): string {
+  const code = typeof error === 'object' && error !== null && 'code' in error ? String((error as { code: unknown }).code) : ''
+  const detail = error instanceof Error ? error.message : String(error)
+  const explanation =
+    code === 'EACCES' || code === 'EPERM' ? `Noema does not have permission to write ${notePath}. Check the folder's permissions, then approve again.`
+    : code === 'EROFS' ? `${notePath} is on a read-only filesystem, so Noema cannot write it.`
+    : code === 'ENOSPC' ? 'The disk is full, so Noema could not write this note.'
+    : code === 'EBUSY' || code === 'ETXTBSY' ? `${notePath} is locked by another program. Close it there, then approve again.`
+    : code === 'EISDIR' ? `${notePath} is a folder, not a note file.`
+    : code === 'ENAMETOOLONG' ? `That note path is too long for this filesystem: ${notePath}`
+    : code === 'ENOENT' ? `Noema could not create the folder for ${notePath}. The vault may have moved since you selected it.`
+    : `Noema could not write ${notePath}.`
+  return code ? `${explanation} (${code}: ${detail})` : `${explanation} (${detail})`
 }
 
 /** Heading-based chunks keep a note's local argument and its heading together. */

@@ -5,7 +5,12 @@ const noema: NoemaApi = {
   vault: {
     getSaved: () => ipcRenderer.invoke('vault:get-saved'),
     choose: () => ipcRenderer.invoke('vault:choose'),
-    revealNote: (path) => ipcRenderer.invoke('vault:reveal-note', path)
+    revealNote: (path) => ipcRenderer.invoke('vault:reveal-note', path),
+    approveWrite: (proposal) => ipcRenderer.invoke('vault:approve-write', proposal)
+  },
+  capture: {
+    propose: (input) => ipcRenderer.invoke('capture:propose', input),
+    proposeLink: (fromPath, toPath, context) => ipcRenderer.invoke('capture:propose-link', fromPath, toPath, context)
   },
   index: {
     status: () => ipcRenderer.invoke('index:status'),

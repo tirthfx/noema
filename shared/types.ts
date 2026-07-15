@@ -38,7 +38,7 @@ export interface NoteSummary {
 
 export interface ToolCallActivity {
   id: string
-  tool: 'search_notes' | 'read_note' | 'list_notes'
+  tool: 'search_notes' | 'read_note' | 'list_notes' | 'write_note' | 'link_notes'
   input: Record<string, unknown>
   status: 'running' | 'complete'
   summary?: string
@@ -50,6 +50,24 @@ export interface AgentResult {
   rawResponse?: string
   retryable?: boolean
 }
+/**
+ * A gated write. Tools return this instead of touching disk; only an approved
+ * EditablePreview commit reaches the real fs write in vault.ts.
+ * `baseContent` is the note's current on-disk text for `edit` proposals, which lets
+ * EditablePreview highlight added lines without a diff library.
+ */
+export interface NoteProposal {
+  path: string
+  content: string
+  kind: 'new' | 'edit'
+  baseContent?: string
+  source?: string
+}
+
+export type CaptureKind = 'text' | 'url'
+export interface CaptureInput { kind: CaptureKind; value: string }
+export interface ProposalResult extends AgentResult { proposal?: NoteProposal }
+export interface WriteResult { ok: boolean; path?: string; error?: string }
 
 export type Persona = 'Academic' | 'Socratic Critic' | 'Plain-Language'
 export interface Citation { path: string; quote: string; title: string }
@@ -64,6 +82,11 @@ export interface NoemaApi {
     getSaved: () => Promise<VaultSelection | null>
     choose: () => Promise<VaultSelection | null>
     revealNote: (path: string) => Promise<void>
+    approveWrite: (proposal: NoteProposal) => Promise<WriteResult>
+  }
+  capture: {
+    propose: (input: CaptureInput) => Promise<ProposalResult>
+    proposeLink: (fromPath: string, toPath: string, context: string) => Promise<ProposalResult>
   }
   index: {
     status: () => Promise<IndexStatus | null>

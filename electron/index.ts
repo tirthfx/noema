@@ -1,4 +1,4 @@
-import { readFile, mkdir, rename, writeFile } from 'node:fs/promises'
+import { readFile, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { IndexRecord, IndexStatus, SearchMatch } from '../shared/types'
@@ -6,7 +6,7 @@ import { chunkMarkdown, readVaultNote, walkMarkdownFiles } from './vault'
 
 export const EMBEDDING_MODEL = 'nvidia/llama-nemotron-embed-1b-v2'
 export const EMBEDDING_DIMENSION = 2048
-export const CHAT_MODEL = 'deepseek-ai/deepseek-v4-pro'
+export const CHAT_MODEL = 'z-ai/glm-5.2'
 const NIM_BASE_URL = 'https://integrate.api.nvidia.com/v1'
 const INDEX_VERSION = 1
 
@@ -90,8 +90,10 @@ function cosineSimilarity(left: number[], right: number[]): number {
 
 export class VaultIndex {
   private records: IndexRecord[] = []
-  private loaded = false
+  private loading: Promise<void> | null = null
   private needsRebuild = false
+  /** Serialises refresh(); concurrent refreshes would race on the same temp file. */
+  private queue: Promise<unknown> = Promise.resolve()
 
   constructor(readonly vaultPath: string) {}
 
@@ -99,9 +101,16 @@ export class VaultIndex {
     return join(this.vaultPath, '.noema', 'index.json')
   }
 
+  /**
+   * Memoised so concurrent callers await the same read. Flipping a `loaded` flag before
+   * awaiting would let a second caller treat a still-empty index as fully loaded.
+   */
   async load(): Promise<void> {
-    if (this.loaded) return
-    this.loaded = true
+    this.loading ??= this.performLoad()
+    return this.loading
+  }
+
+  private async performLoad(): Promise<void> {
     try {
       const raw = await readFile(this.indexPath, 'utf8')
       const parsed = JSON.parse(raw) as StoredIndex
@@ -118,7 +127,17 @@ export class VaultIndex {
     }
   }
 
+  /**
+   * Queued rather than coalesced: a refresh requested after an approved write must observe
+   * that new note, so it waits for any in-flight refresh instead of joining it.
+   */
   async refresh(): Promise<IndexStatus> {
+    const run = this.queue.then(() => this.performRefresh(), () => this.performRefresh())
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  private async performRefresh(): Promise<IndexStatus> {
     await this.load()
     const originalRecords = this.records
     const rebuildAll = this.needsRebuild
@@ -153,9 +172,16 @@ export class VaultIndex {
 
       await mkdir(join(this.vaultPath, '.noema'), { recursive: true })
       const serialized: StoredIndex = { version: INDEX_VERSION, model: EMBEDDING_MODEL, dimension: EMBEDDING_DIMENSION, records: nextRecords }
-      const temporaryIndexPath = `${this.indexPath}.tmp`
-      await writeFile(temporaryIndexPath, `${JSON.stringify(serialized, null, 2)}\n`, 'utf8')
-      await rename(temporaryIndexPath, this.indexPath)
+      // Unique per write so a second app instance on this vault cannot rename our temp file
+      // out from under us; the rename itself stays atomic.
+      const temporaryIndexPath = `${this.indexPath}.${process.pid}-${Date.now()}.tmp`
+      try {
+        await writeFile(temporaryIndexPath, `${JSON.stringify(serialized, null, 2)}\n`, 'utf8')
+        await rename(temporaryIndexPath, this.indexPath)
+      } catch (error) {
+        await rm(temporaryIndexPath, { force: true }).catch(() => undefined)
+        throw error
+      }
       this.records = nextRecords
       this.needsRebuild = false
       return this.status(embeddedChunks, removedChunks)

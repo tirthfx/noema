@@ -1,8 +1,9 @@
 import { FormEvent, useEffect, useState } from 'react'
-import type { AgentResult, Artifact, GroundedAnswer, Persona, ToolCallActivity, VaultSelection } from '../shared/types'
+import type { AgentResult, Artifact, CaptureKind, GroundedAnswer, NoteProposal, NoteSummary, Persona, ToolCallActivity, VaultSelection } from '../shared/types'
 import ToolCallIndicator from './components/ToolCallIndicator'
 import ArtifactView from './components/ArtifactView'
 import AnswerView from './components/AnswerView'
+import EditablePreview from './components/EditablePreview'
 
 type ChatMessage = { id: string; role: 'user' | 'assistant'; content: string }
 type ChatEntry = { kind: 'message'; value: ChatMessage } | { kind: 'tool'; value: ToolCallActivity } | { kind: 'answer'; value: GroundedAnswer }
@@ -36,6 +37,16 @@ export default function App() {
   const [artifact, setArtifact] = useState<Artifact | null>(null)
   const [generating, setGenerating] = useState(false)
   const [retryArtifact, setRetryArtifact] = useState(false)
+  const [captureKind, setCaptureKind] = useState<CaptureKind>('url')
+  const [captureValue, setCaptureValue] = useState('')
+  const [capturing, setCapturing] = useState(false)
+  const [proposal, setProposal] = useState<NoteProposal | null>(null)
+  const [captureError, setCaptureError] = useState<string | null>(null)
+  const [writtenPath, setWrittenPath] = useState<string | null>(null)
+  const [notes, setNotes] = useState<NoteSummary[]>([])
+  const [linkFrom, setLinkFrom] = useState('')
+  const [linkTo, setLinkTo] = useState('')
+  const [linkContext, setLinkContext] = useState('')
 
   useEffect(() => {
     window.noema.vault.getSaved().then(setVault).catch(() => setError('Noema could not read the previously selected vault. Choose it again to continue.')).finally(() => setLoading(false))
@@ -75,6 +86,45 @@ export default function App() {
     } finally { setSending(false) }
   }
 
+  async function loadNotes(): Promise<void> {
+    try { setNotes(await window.noema.tools.listNotes()) } catch { setNotes([]) }
+  }
+
+  useEffect(() => { if (vault) void loadNotes() }, [vault?.vaultPath])
+
+  /** Capture proposes a draft only — EditablePreview is the sole route to disk. */
+  async function runCapture(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault()
+    if (!captureValue.trim() || capturing) return
+    setCapturing(true); setCaptureError(null); setProposal(null); setWrittenPath(null)
+    try {
+      const result = await window.noema.capture.propose({ kind: captureKind, value: captureValue })
+      if (result.proposal) setProposal(result.proposal)
+      else setCaptureError(result.error ?? 'Noema could not draft a note from that capture.')
+    } catch (reason) {
+      setCaptureError(reason instanceof Error ? reason.message : 'Noema could not draft a note from that capture.')
+    } finally { setCapturing(false) }
+  }
+
+  async function runLink(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault()
+    if (!linkFrom || !linkTo || capturing) return
+    setCapturing(true); setCaptureError(null); setProposal(null); setWrittenPath(null)
+    try {
+      const result = await window.noema.capture.proposeLink(linkFrom, linkTo, linkContext)
+      if (result.proposal) setProposal(result.proposal)
+      else setCaptureError(result.error ?? 'Noema could not propose that link.')
+    } catch (reason) {
+      setCaptureError(reason instanceof Error ? reason.message : 'Noema could not propose that link.')
+    } finally { setCapturing(false) }
+  }
+
+  function onWritten(path: string): void {
+    setProposal(null); setWrittenPath(path); setCaptureValue('')
+    void loadNotes()
+    window.noema.index.status().then((status) => setVault((current) => current ? { ...current, indexStatus: status ?? current.indexStatus } : current)).catch(() => undefined)
+  }
+
   function onSubmit(event: FormEvent<HTMLFormElement>): void { event.preventDefault(); void send() }
   async function runArtifact(): Promise<void> {
     if (!topic.trim() || generating) return
@@ -94,12 +144,33 @@ export default function App() {
             <div className="chat-header"><p className="eyebrow">VAULT CONNECTED</p><p className="index-summary">{vault.indexStatus ? `${vault.indexStatus.indexedNotes} notes · ${vault.indexStatus.indexedChunks} chunks` : 'Index status unavailable'}</p></div>
             {vault.indexStatus?.error && <div className="index-error"><p className="error-copy" role="alert">{vault.indexStatus.error}</p><button className="secondary-action" onClick={() => void rebuildIndex()} disabled={rebuilding}>{rebuilding ? 'Rebuilding index…' : 'Retry indexing'}</button></div>}
             <form className="artifact-controls" onSubmit={generateArtifact}><input value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="Literature-review topic" disabled={generating} /><select value={persona} onChange={(event) => setPersona(event.target.value as Persona)} disabled={generating}><option>Academic</option><option>Socratic Critic</option><option>Plain-Language</option></select><button className="secondary-action" disabled={generating || !topic.trim()}>{generating ? 'Contacting NIM…' : 'Generate review'}</button></form>
+            <form className="capture-controls" onSubmit={(event) => void runCapture(event)}>
+              <label className="sr-only" htmlFor="capture-kind">Capture type</label>
+              <select id="capture-kind" value={captureKind} onChange={(event) => setCaptureKind(event.target.value as CaptureKind)} disabled={capturing}><option value="url">URL</option><option value="text">Text</option></select>
+              <label className="sr-only" htmlFor="capture-value">Content to capture</label>
+              <input id="capture-value" value={captureValue} onChange={(event) => setCaptureValue(event.target.value)} placeholder={captureKind === 'url' ? 'https://example.com/article' : 'Paste text to file as a note'} disabled={capturing} />
+              <button className="secondary-action" disabled={capturing || !captureValue.trim()}>{capturing ? 'Drafting…' : 'Capture'}</button>
+            </form>
+            {notes.length > 1 && (
+              <form className="capture-controls link-controls" onSubmit={(event) => void runLink(event)}>
+                <label className="sr-only" htmlFor="link-from">Link from note</label>
+                <select id="link-from" value={linkFrom} onChange={(event) => setLinkFrom(event.target.value)} disabled={capturing}><option value="">Link from…</option>{notes.map((note) => <option key={note.path} value={note.path}>{note.title}</option>)}</select>
+                <label className="sr-only" htmlFor="link-to">Link to note</label>
+                <select id="link-to" value={linkTo} onChange={(event) => setLinkTo(event.target.value)} disabled={capturing}><option value="">Link to…</option>{notes.map((note) => <option key={note.path} value={note.path}>{note.title}</option>)}</select>
+                <label className="sr-only" htmlFor="link-context">Link context</label>
+                <input id="link-context" value={linkContext} onChange={(event) => setLinkContext(event.target.value)} placeholder="Why these connect (optional)" disabled={capturing} />
+                <button className="secondary-action" disabled={capturing || !linkFrom || !linkTo}>Propose link</button>
+              </form>
+            )}
             <div className="message-list" aria-live="polite">
               {entries.length === 0 && !chatError && <p className="chat-empty">Ask a question about the notes in this vault.</p>}
               {entries.map((entry) => entry.kind === 'message'
                 ? <article className={`chat-message ${entry.value.role}`} key={entry.value.id}><p>{entry.value.content}</p></article>
                 : entry.kind === 'tool' ? <ToolCallIndicator activity={entry.value} key={entry.value.id} /> : <AnswerView answer={entry.value} key={`answer-${entries.indexOf(entry)}`} />)}
               {artifact && <ArtifactView artifact={artifact} />}
+              {proposal && <EditablePreview proposal={proposal} onWritten={onWritten} onDiscard={() => setProposal(null)} />}
+              {captureError && <div className="agent-error" role="alert"><p>{captureError}</p></div>}
+              {writtenPath && <p className="capture-written" role="status">Wrote {writtenPath} to your vault.</p>}
               {chatError && <div className="agent-error" role="alert"><p>{chatError.error}</p>{chatError.rawResponse && <pre>{chatError.rawResponse}</pre>}{chatError.retryable && <button className="secondary-action" onClick={() => retryArtifact ? void runArtifact() : void send(chatError.prompt)} disabled={sending || generating}>{retryArtifact ? 'Retry review' : 'Retry message'}</button>}</div>}
             </div>
             <form className="chat-input" onSubmit={onSubmit}><label className="sr-only" htmlFor="chat-message">Ask about your notes</label><textarea id="chat-message" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Ask about your notes…" rows={2} disabled={sending || Boolean(vault.indexStatus?.error)} /><button className="primary-action" type="submit" disabled={sending || !draft.trim() || Boolean(vault.indexStatus?.error)}>{sending ? 'Working…' : 'Send'}</button></form>

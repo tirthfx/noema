@@ -1,13 +1,13 @@
 import { app, BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron'
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { IndexStatus, VaultConfig, VaultSelection } from '../shared/types'
+import type { IndexStatus, VaultConfig, VaultSelection, WriteResult } from '../shared/types'
 import { getVaultIndex } from './index'
 import { listNotes } from './tools/list-notes'
 import { readNote } from './tools/read-note'
 import { searchNotes } from './tools/search-notes'
-import { answerQuestion, generateArtifact, sendAgentMessage } from './agent'
-import { resolveVaultPath } from './vault'
+import { answerQuestion, generateArtifact, proposeCapture, proposeLink, sendAgentMessage } from './agent'
+import { describeWriteFailure, resolveVaultPath, writeVaultNote } from './vault'
 
 const LAST_VAULT_FILE = 'last-vault.json'
 
@@ -85,6 +85,40 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     if (typeof path !== 'string') return
     const vault = await findSavedVault(); const fullPath = vault ? resolveVaultPath(vault.vaultPath, path) : null
     if (fullPath) shell.showItemInFolder(fullPath)
+  })
+  // The only path in the app from a proposal to disk. Reached exclusively by an approved
+  // EditablePreview commit (rules.md §4); fs failures come back as a specific, visible error.
+  ipcMain.handle('vault:approve-write', async (_event, proposal: unknown): Promise<WriteResult> => {
+    if (!proposal || typeof proposal !== 'object') return { ok: false, error: 'Invalid note proposal.' }
+    const value = proposal as { path?: unknown; content?: unknown }
+    if (typeof value.path !== 'string' || !value.path.trim() || typeof value.content !== 'string') return { ok: false, error: 'Invalid note proposal.' }
+    const vault = await findSavedVault()
+    if (!vault) return { ok: false, error: 'Choose a vault before writing.' }
+    try {
+      await writeVaultNote(vault.vaultPath, value.path, value.content)
+    } catch (error) {
+      return { ok: false, error: describeWriteFailure(error, value.path) }
+    }
+    // Fold the approved note into the index so it is searchable without a manual rebuild.
+    try {
+      await getVaultIndex(vault.vaultPath).refresh()
+    } catch {
+      // An index refresh failure must not imply the write failed — the note is on disk.
+    }
+    return { ok: true, path: value.path }
+  })
+  ipcMain.handle('capture:propose', async (event, input: unknown) => {
+    if (!input || typeof input !== 'object') throw new Error('Invalid capture input.')
+    const value = input as { kind?: unknown; value?: unknown }
+    if ((value.kind !== 'text' && value.kind !== 'url') || typeof value.value !== 'string' || !value.value.trim()) throw new Error('Paste text or a URL before capturing it.')
+    const vault = await findSavedVault(); if (!vault) throw new Error('Choose and index a vault before capturing into it.')
+    return proposeCapture(vault.vaultPath, { kind: value.kind, value: value.value }, (activity) => event.sender.send('agent:tool-call-activity', activity))
+  })
+  ipcMain.handle('capture:propose-link', async (event, fromPath: unknown, toPath: unknown, context: unknown) => {
+    if (typeof fromPath !== 'string' || typeof toPath !== 'string' || !fromPath.trim() || !toPath.trim()) throw new Error('Choose both notes before proposing a link.')
+    if (context !== undefined && typeof context !== 'string') throw new Error('Invalid link context.')
+    const vault = await findSavedVault(); if (!vault) throw new Error('Choose a vault before proposing a link.')
+    return proposeLink(vault.vaultPath, fromPath, toPath, context ?? '', (activity) => event.sender.send('agent:tool-call-activity', activity))
   })
   ipcMain.handle('index:status', async () => {
     const vault = await findSavedVault()

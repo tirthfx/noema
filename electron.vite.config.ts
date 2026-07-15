@@ -11,7 +11,8 @@ export default defineConfig({
           index: resolve('electron/main.ts'),
           'phase1-smoke': resolve('electron/phase1-smoke.ts'),
           'phase3-smoke': resolve('electron/phase3-smoke.ts'),
-          'phase4-smoke': resolve('electron/phase4-smoke.ts')
+          'phase4-smoke': resolve('electron/phase4-smoke.ts'),
+          'phase5-smoke': resolve('electron/phase5-smoke.ts')
         }
       }
     }
