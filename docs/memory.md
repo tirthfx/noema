@@ -10,13 +10,13 @@ This is a clean restart. Full pre-restart history (naming journey, the original 
 
 **Restart date:** 16 Jul 2026
 **Deadline:** 21 Jul 2026, 5:00 PM PT / 22 Jul 2026, 5:30 AM IST
-**Current phase:** Phase 1 complete. Phase 2 (Agent loop core) is next.
+**Current phase:** Phase 2 complete. Phase 3 (Notes → Artifact hero) is next.
 
 ## Currently working on
 
 > Update this line every session. Example: `Phase 1 — resolving which NIM model to use for embeddings (architecture.md §6 open item).`
 
-Phase 2 — building the minimal chat UI and NIM tool-calling loop on the read-only index tools.
+Phase 3 — building the Notes → Artifact hero: validated citations, the Citation component, tensions, and persona tone controls.
 
 ---
 
@@ -26,7 +26,7 @@ Mirrors `phases.md`. Check off acceptance criteria, not just "touched the code."
 
 - [x] **Phase 0** — Scaffold & skeleton (Electron+React+Vite+TS+Tailwind, security settings on from the start, folder picker, launches clean on macOS; Windows manual verification remains pending until a Windows runner is available)
 - [x] **Phase 1** — Vault ingestion & index (heading-based chunks, NIM embeddings, `.noema/index.json`, incremental re-index, read-only tools working; automated temporary-vault verification passed)
-- [ ] **Phase 2** — Agent loop core (tool-calling loop, minimal chat UI, visible tool calls)
+- [x] **Phase 2** — Agent loop core (tool-calling loop, minimal chat UI, visible tool calls)
 - [ ] **Phase 3** — HERO: Notes → Artifact (citation validator, Citation component, Tensions section, persona picker)
 - [ ] **Phase 4** — Ask-your-knowledge (grounded Q&A, refusal path)
 - [ ] **Phase 5** — Capture & auto-file (text/URL capture, editable preview, approved writes, PDF if time allows)
@@ -89,6 +89,8 @@ Mirrors `phases.md`. Check off acceptance criteria, not just "touched the code."
 **16 Jul 2026** — Phase 1 complete. Queried the live NIM catalog, selected `nvidia/llama-nemotron-embed-1b-v2` (2048 dimensions), and verified both its embeddings endpoint and `z-ai/glm-5.2` chat completions with HTTP 200. Implemented the main-process Markdown walker (skips `.noema/` and `.obsidian/`), heading-based chunking, plain-JSON incremental index, cosine search, and the three read-only tools behind the typed IPC bridge. NIM requests retry once on timeouts/5xx; chat 403s surface the Public API Endpoints hint. A temporary vault smoke test verified relevant search results, zero re-embeds when unchanged, selective re-embedding after editing one note, record removal after deletion, and corrupt-index rebuild without a crash. A final approved real-vault check indexed 46 notes / 1,141 chunks, returned ranked semantic-search matches, and re-embedded zero unchanged chunks. Next: Phase 2 only — chat UI and tool-calling loop.
 
 **16 Jul 2026** — Phase 0–1 audit and hardening pass. Fixed atomic index persistence and failure recovery so a failed embedding/write cannot leave a partial in-memory index; invalid stored records now force a full rebuild. Read-only IPC tools no longer initiate a vault re-scan, their incoming values are validated, saved-vault validation now requires a directory, and existing index counts remain visible after a failed refresh. The renderer now offers an explicit retry for failed/corrupt index builds; external window-open requests are denied. Re-verified strict TypeScript, the synthetic semantic-search smoke test (including zero unchanged re-embeds), local fonts and security settings, renderer API-key absence, and the unpacked macOS app contents.
+
+**16 Jul 2026** — Phase 2 complete. Added the main-process NIM `z-ai/glm-5.2` tool-calling loop and exposed it through a narrow `agent:send-message` IPC handler; the renderer has no NIM access. The loop supplies only `search_notes`, `read_note`, and `list_notes`, executes all tool calls returned in a turn sequentially, appends each result as a `tool` message, and continues until a plain assistant response. Tool activity is sent over the existing restricted bridge and rendered inline by default, with the amber pulse limited to the in-flight portion of each call. A malformed response or tool-argument JSON is stopped at the parse boundary and shown with the raw response plus retry; NIM timeouts/5xx retry once then show a specific error. Strict TypeScript and an unpacked production build pass. No NIM-specific response quirk was observed during this build verification; Phase 3 can reuse this loop but must add citation validation before treating generated claims as grounded.
 
 ---
 

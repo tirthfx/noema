@@ -36,6 +36,21 @@ export interface NoteSummary {
   title: string
 }
 
+export interface ToolCallActivity {
+  id: string
+  tool: 'search_notes' | 'read_note' | 'list_notes'
+  input: Record<string, unknown>
+  status: 'running' | 'complete'
+  summary?: string
+}
+
+export interface AgentResult {
+  content?: string
+  error?: string
+  rawResponse?: string
+  retryable?: boolean
+}
+
 export interface NoemaApi {
   vault: {
     getSaved: () => Promise<VaultSelection | null>
@@ -49,6 +64,10 @@ export interface NoemaApi {
     searchNotes: (query: string, topK?: number) => Promise<SearchMatch[]>
     readNote: (path: string) => Promise<string | null>
     listNotes: (folder?: string) => Promise<NoteSummary[]>
+  }
+  agent: {
+    sendMessage: (message: string) => Promise<AgentResult>
+    onToolCallActivity: (listener: (activity: ToolCallActivity) => void) => () => void
   }
   window: {
     minimize: () => Promise<void>

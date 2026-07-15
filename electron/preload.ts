@@ -15,6 +15,14 @@ const noema: NoemaApi = {
     readNote: (path) => ipcRenderer.invoke('tools:read-note', path),
     listNotes: (folder) => ipcRenderer.invoke('tools:list-notes', folder)
   },
+  agent: {
+    sendMessage: (message) => ipcRenderer.invoke('agent:send-message', message),
+    onToolCallActivity: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, activity: Parameters<typeof listener>[0]) => listener(activity)
+      ipcRenderer.on('agent:tool-call-activity', handler)
+      return () => ipcRenderer.removeListener('agent:tool-call-activity', handler)
+    }
+  },
   window: {
     minimize: () => ipcRenderer.invoke('window:minimize'),
     toggleMaximize: () => ipcRenderer.invoke('window:toggle-maximize'),

@@ -6,6 +6,7 @@ import { getVaultIndex } from './index'
 import { listNotes } from './tools/list-notes'
 import { readNote } from './tools/read-note'
 import { searchNotes } from './tools/search-notes'
+import { sendAgentMessage } from './agent'
 
 const LAST_VAULT_FILE = 'last-vault.json'
 
@@ -103,6 +104,14 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     if (folder !== undefined && typeof folder !== 'string') return []
     const vault = await findSavedVault()
     return vault ? listNotes(vault.vaultPath, folder) : []
+  })
+  ipcMain.handle('agent:send-message', async (event, message: unknown) => {
+    if (typeof message !== 'string' || !message.trim()) throw new Error('Enter a message before sending it.')
+    const vault = await findSavedVault()
+    if (!vault) throw new Error('Choose and index a vault before asking Noema.')
+    return sendAgentMessage(vault.vaultPath, message.trim(), (activity) => {
+      event.sender.send('agent:tool-call-activity', activity)
+    })
   })
   ipcMain.handle('window:minimize', () => getWindow()?.minimize())
   ipcMain.handle('window:toggle-maximize', () => {
