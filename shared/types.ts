@@ -56,6 +56,8 @@ export interface Citation { path: string; quote: string; title: string }
 export interface ArtifactClaim { text: string; citations: Citation[] }
 export interface Artifact { title: string; claims: ArtifactClaim[]; tensions: Array<{ question: string; sides: ArtifactClaim[] }> }
 export interface ArtifactResult extends AgentResult { artifact?: Artifact }
+export interface GroundedAnswer { claims: ArtifactClaim[]; refusal?: boolean }
+export interface GroundedAnswerResult extends AgentResult { answer?: GroundedAnswer }
 
 export interface NoemaApi {
   vault: {
@@ -76,6 +78,7 @@ export interface NoemaApi {
     sendMessage: (message: string) => Promise<AgentResult>
     onToolCallActivity: (listener: (activity: ToolCallActivity) => void) => () => void
     generateArtifact: (topic: string, persona: Persona) => Promise<ArtifactResult>
+    answerQuestion: (question: string) => Promise<GroundedAnswerResult>
   }
   window: {
     minimize: () => Promise<void>

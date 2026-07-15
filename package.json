@@ -11,6 +11,7 @@
     "build:unpack": "npm run typecheck && electron-vite build && electron-builder --dir",
     "smoke:index": "electron-vite build && node out/main/phase1-smoke.js",
     "smoke:artifact": "electron-vite build && node out/main/phase3-smoke.js",
+    "smoke:answer": "electron-vite build && node out/main/phase4-smoke.js",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.web.json"
   },
   "dependencies": {

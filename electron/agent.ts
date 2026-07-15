@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { AgentResult, Artifact, ArtifactResult, Persona, ToolCallActivity } from '../shared/types'
+import type { AgentResult, Artifact, ArtifactResult, GroundedAnswerResult, Persona, ToolCallActivity } from '../shared/types'
 import { validateArtifact } from './citation-validator'
 import { listNotes } from './tools/list-notes'
 import { readNote } from './tools/read-note'
@@ -9,6 +9,7 @@ import { searchNotes } from './tools/search-notes'
 const NIM_CHAT_URL = 'https://integrate.api.nvidia.com/v1/chat/completions'
 const MODEL = 'z-ai/glm-5.2'
 const MAX_TURNS = 8
+export const GROUNDING_THRESHOLD = 0.28
 
 type ChatMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool'
@@ -192,16 +193,38 @@ function artifactFrom(value: unknown): Artifact | null {
   return draft as Artifact
 }
 
+function parseModelJson(content: string): unknown {
+  return JSON.parse(content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
+}
+
 export async function generateArtifact(vaultPath: string, topic: string, persona: Persona, onActivity: (activity: ToolCallActivity) => void): Promise<ArtifactResult> {
   const tone = persona === 'Academic' ? 'formal and analytical' : persona === 'Socratic Critic' ? 'probing, careful, and explicit about uncertainty' : 'clear, direct, and accessible'
   const prompt = `Create a genuine literature review about "${topic}" from this vault only. Use search_notes and read_note before writing. Your tone is ${tone}. Return ONLY valid JSON: {"title":string,"claims":[{"text":string,"citations":[{"path":string,"quote":string}]}],"tensions":[{"question":string,"sides":[{"text":string,"citations":[{"path":string,"quote":string}]}]}]}. Every claim and every tension side needs a citation whose quote is a verbatim passage from the named note. Do not add uncited claims. Identify genuine contradictions only when both sides are supported.`
   const result = await sendAgentMessage(vaultPath, prompt, onActivity)
   if (!result.content) return result
   try {
-    const draft = artifactFrom(JSON.parse(result.content))
+    const draft = artifactFrom(parseModelJson(result.content))
     if (!draft) throw new Error('shape')
     return { artifact: await validateArtifact(vaultPath, draft) }
   } catch {
     return { error: 'The model did not return a valid literature-review structure. Nothing was rendered as an artifact.', rawResponse: result.content, retryable: true }
   }
+}
+
+export async function answerQuestion(vaultPath: string, question: string, onActivity: (activity: ToolCallActivity) => void): Promise<GroundedAnswerResult> {
+  const activityId = `grounding-${Date.now()}`
+  onActivity({ id: activityId, tool: 'search_notes', input: { query: question, topK: 5 }, status: 'running' })
+  let matches
+  try { matches = await searchNotes(vaultPath, question, 5) } catch (error) { return { error: error instanceof Error ? error.message : 'Noema could not search this vault.', retryable: true } }
+  onActivity({ id: activityId, tool: 'search_notes', input: { query: question, topK: 5 }, status: 'complete', summary: `${matches.length} matches` })
+  if (!matches[0] || matches[0].score < GROUNDING_THRESHOLD) return { answer: { claims: [], refusal: true } }
+  const prompt = `Answer this vault question: "${question}". Use search_notes and read_note as needed. Return ONLY valid JSON: {"claims":[{"text":string,"citations":[{"path":string,"quote":string}]}]}. Every claim needs at least one verbatim quote from its named vault note. Do not use general knowledge or include an unsupported claim.`
+  const result = await sendAgentMessage(vaultPath, prompt, onActivity)
+  if (!result.content) return result
+  try {
+    const parsed = parseModelJson(result.content) as { claims?: unknown }
+    if (!Array.isArray(parsed.claims)) throw new Error('shape')
+    const validated = await validateArtifact(vaultPath, { title: '', claims: parsed.claims as Artifact['claims'], tensions: [] })
+    return validated.claims.length ? { answer: { claims: validated.claims } } : { answer: { claims: [], refusal: true } }
+  } catch { return { error: 'The model did not return a valid grounded-answer structure.', rawResponse: result.content, retryable: true } }
 }

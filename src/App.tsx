@@ -1,10 +1,11 @@
 import { FormEvent, useEffect, useState } from 'react'
-import type { AgentResult, Artifact, Persona, ToolCallActivity, VaultSelection } from '../shared/types'
+import type { AgentResult, Artifact, GroundedAnswer, Persona, ToolCallActivity, VaultSelection } from '../shared/types'
 import ToolCallIndicator from './components/ToolCallIndicator'
 import ArtifactView from './components/ArtifactView'
+import AnswerView from './components/AnswerView'
 
 type ChatMessage = { id: string; role: 'user' | 'assistant'; content: string }
-type ChatEntry = { kind: 'message'; value: ChatMessage } | { kind: 'tool'; value: ToolCallActivity }
+type ChatEntry = { kind: 'message'; value: ChatMessage } | { kind: 'tool'; value: ToolCallActivity } | { kind: 'answer'; value: GroundedAnswer }
 type ChatError = AgentResult & { prompt: string }
 
 function WindowsControls() {
@@ -64,9 +65,9 @@ export default function App() {
     setDraft(''); setSending(true); setChatError(null)
     setEntries((current) => [...current, { kind: 'message', value: { id: crypto.randomUUID(), role: 'user', content: message } }])
     try {
-      const result = await window.noema.agent.sendMessage(message)
-      const content = result.content
-      if (content) setEntries((current) => [...current, { kind: 'message', value: { id: crypto.randomUUID(), role: 'assistant', content } }])
+      const result = await window.noema.agent.answerQuestion(message)
+      const answer = result.answer
+      if (answer) setEntries((current) => [...current, { kind: 'answer', value: answer }])
       else setChatError({ ...result, prompt: message })
     } catch (reason) {
       setChatError({ prompt: message, error: reason instanceof Error ? reason.message : 'Noema could not send this message.', retryable: true })
@@ -95,7 +96,7 @@ export default function App() {
               {entries.length === 0 && !chatError && <p className="chat-empty">Ask a question about the notes in this vault.</p>}
               {entries.map((entry) => entry.kind === 'message'
                 ? <article className={`chat-message ${entry.value.role}`} key={entry.value.id}><p>{entry.value.content}</p></article>
-                : <ToolCallIndicator activity={entry.value} key={entry.value.id} />)}
+                : entry.kind === 'tool' ? <ToolCallIndicator activity={entry.value} key={entry.value.id} /> : <AnswerView answer={entry.value} key={`answer-${entries.indexOf(entry)}`} />)}
               {artifact && <ArtifactView artifact={artifact} />}
               {chatError && <div className="agent-error" role="alert"><p>{chatError.error}</p>{chatError.rawResponse && <pre>{chatError.rawResponse}</pre>}{chatError.retryable && <button className="secondary-action" onClick={() => void send(chatError.prompt)} disabled={sending}>Retry message</button>}</div>}
             </div>

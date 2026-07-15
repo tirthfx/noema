@@ -23,7 +23,8 @@ const noema: NoemaApi = {
       ipcRenderer.on('agent:tool-call-activity', handler)
       return () => ipcRenderer.removeListener('agent:tool-call-activity', handler)
     },
-    generateArtifact: (topic, persona) => ipcRenderer.invoke('agent:generate-artifact', topic, persona)
+    generateArtifact: (topic, persona) => ipcRenderer.invoke('agent:generate-artifact', topic, persona),
+    answerQuestion: (question) => ipcRenderer.invoke('agent:answer-question', question)
   },
   window: {
     minimize: () => ipcRenderer.invoke('window:minimize'),
