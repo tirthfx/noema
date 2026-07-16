@@ -1,45 +1,52 @@
 # Noema — Design
 
-Research-instrument aesthetic, not a consumer AI toy. Dark only. Amber is a signal, not a decoration — it means "the agent is acting" or "this is a citation," nowhere else. If you find yourself reaching for amber to make a button look nicer, don't.
+**Reading Room**: a warm-white study, not a consumer AI toy and not another dark AI app. Light only. The instrument metaphor stays — signals mean things — but the room is lit.
+
+Two signal colors, one meaning each:
+- **Green** means *verified* — validated citations, approved writes, primary actions that commit. If green appears, code checked something or the user approved something.
+- **Amber** means *the agent is acting* — the tool-call pulse while a call is in flight, and nowhere else.
+
+If you reach for either color to make something look nicer, don't.
 
 ---
 
 ## 1. Color & theme
 
-All values as CSS custom properties in `src/styles/tokens.css`, consumed by `tailwind.config.ts` — no raw hex values inside component files.
+All values as CSS custom properties in `src/styles/tokens.css` — no raw hex values inside component files.
 
 ```css
 :root {
-  /* Backgrounds — layered, not flat */
-  --bg-base:        #0B0D0F;   /* window background */
-  --bg-surface:      #14171A;   /* cards, panels */
-  --bg-elevated:     #1C2024;   /* modals, EditablePreview, popovers */
-  --bg-inset:        #0E1012;   /* code/mono blocks, tool-call chips */
+  /* Grounds — warm paper, layered */
+  --bg-wall:   #F7F6F2;   /* window ground, sidebar, composer */
+  --bg-panel:  #FFFFFF;   /* the reading surface, cards, modals */
+  --bg-inset:  #F1EFEA;   /* mono blocks, inputs on panel */
+  --bg-scrim:  rgb(34 36 42 / 42%);
 
   /* Borders */
-  --border-subtle:   #2A2F35;
-  --border-strong:    #3A4046;
+  --border-subtle: #E4E2DC;
+  --border-strong: #CBC8C0;
 
-  /* Text — warm off-white, not pure white (paper-under-lamp, not screen-glow) */
-  --text-primary:    #E8E6E1;
-  --text-secondary:  #9BA0A6;
-  --text-tertiary:   #6B7178;
+  /* Text — ink on paper */
+  --text-primary:   #22242A;
+  --text-secondary: #6E7076;
+  --text-tertiary:  #989A9F;
 
-  /* The one accent — agent activity + citations, nothing else */
-  --accent-amber:      #D9A441;
-  --accent-amber-dim:  #8A6A32;   /* hover/pressed, and amber-on-dark-bg text */
-  --accent-amber-bg:   #2A2213;   /* citation chip background */
+  /* Signals */
+  --accent-green:      #31614C;   /* citations, verification, primary actions */
+  --accent-green-soft: #EAF0EC;   /* citation chip bg, selected nav bg */
+  --accent-amber:      #B0813B;   /* agent activity pulse ONLY */
 
   /* Status — muted, not neon */
-  --state-success:   #7A9B76;
-  --state-error:     #B56A5C;
-  --state-warning:   #C9A45C;
+  --state-success: #4C7A5C;
+  --state-error:   #A94F42;
+  --state-warning: #A87F34;
 }
 ```
 
 Usage discipline:
-- `--accent-amber` appears on: the tool-call indicator while the agent is acting, the Citation component's border/icon, and nowhere in standard navigation, buttons, or chrome.
-- Everything else in the UI is grayscale (`--bg-*`, `--text-*`, `--border-*`). If a screen has more than one amber element competing for attention at once, that's a bug, not a feature.
+- `--accent-green` appears on: the Citation component, the selected sidebar item, primary action buttons, and confirmation copy for approved writes.
+- `--accent-amber` appears on: the ToolCallIndicator while a call is running. Nowhere else.
+- Everything else is ink-on-paper neutrals. If a screen has signals competing for attention, that's a bug.
 
 ## 2. Fonts
 
@@ -47,94 +54,77 @@ Three fonts, each with one job. Never mix them within the same line of text.
 
 | Font | Role | Where |
 |---|---|---|
-| **Inter** | UI chrome — "click this" | Buttons, nav, labels, menus, form inputs |
-| **Source Serif 4** | Note & artifact content — "read this" | Note bodies, generated artifacts (literature reviews, etc.), the Q&A answer text |
-| **JetBrains Mono** | Machine-generated/machine-referential — "the machine did this" | Tool-call indicators, file paths, citation source references, index/debug info |
+| **Inter** | UI chrome — "click this" | Buttons, nav, labels, form inputs |
+| **Source Serif 4** | Reading — "read this" | Questions, answers, artifacts, empty-state guidance, view titles |
+| **JetBrains Mono** | Machine-referential — "the machine did this" | Tool calls, file paths, citation refs, index stats |
 
-```css
---font-ui:     'Inter', system-ui, sans-serif;
---font-content: 'Source Serif 4', Georgia, serif;
---font-mono:    'JetBrains Mono', 'SF Mono', monospace;
-```
-
-Load via local font files bundled with the app (not a CDN — this is a desktop app, don't add a network dependency for something this basic).
+Loaded via bundled font files (no CDN — desktop app).
 
 ## 3. Typographic scale
 
 | Token | Size / line-height | Weight | Use |
 |---|---|---|---|
-| `text-display` | 28px / 36px | 600 | Artifact titles |
-| `text-heading` | 20px / 28px | 600 | Section headings (Tensions & Open Questions, etc.) |
-| `text-body-ui` | 14px / 20px | 400–500 | UI chrome (Inter) |
-| `text-body-content` | 17px / 28px | 400 | Note/artifact prose (Source Serif 4) — generous line-height, this is reading material |
-| `text-caption` | 12px / 16px | 400 | Secondary labels, timestamps |
-| `text-mono` | 13px / 18px | 400 | Tool calls, paths, citation refs (JetBrains Mono) |
+| `text-display` | 27px / 36px | 600 | Artifact titles |
+| `text-heading` | 20px / 28px | 600 | Section headings |
+| `text-question` | 19px / 1.4 | 600 | The user's question in the stream (serif) |
+| `text-body-content` | 16px / 1.75 | 400 | Answer/artifact prose (serif) — generous line-height, this is reading material |
+| `text-body-ui` | 13–14px / 20px | 400–600 | UI chrome (Inter) |
+| `text-caption` | 11–12px / 16px | 400–500 | Secondary labels, eyebrows |
+| `text-mono` | 11–13px / 18px | 400 | Tool calls, paths (JetBrains Mono) |
 
-Keep the scale small and don't add sizes ad hoc — six sizes is enough for this app's actual surface area.
+## 4. Layout
 
-## 4. Component specs
+Sidebar app, one main surface:
+
+- **Sidebar** (218px, `--bg-wall`): brand, then the five workspace modes — Ask, Review, Capture, Link, Corpus — as nav items with stroke icons. Selected item gets `--accent-green-soft` bg + green text. Footer: vault name, index stats in mono, a quiet "Switch vault" text link. The top ~30px is a drag region (macOS traffic lights live here).
+- **Main column**: a slim header (serif view title; on Ask, the mono tagline "grounded · citations validated in code"; Windows window controls on Windows), then the reading surface (`--bg-panel`, white), then the composer.
+- **Composer** (`--bg-wall` strip): one pill-shaped row (`--bg-panel`, hairline border, soft radius) whose fields change with the mode. One green primary button per row. Corpus has no composer.
+- The reading surface is the only white area — light-from-the-page, like a manuscript on a desk.
+
+## 5. Component specs
 
 ### Citation (signature component)
-
-The single most important visual element in the app — this is what makes F1's grounding claim *visible*, not just true in code.
-
-- Renders as a small pill/chip inline with the artifact text: amber border (`--accent-amber`), amber-tinted background (`--accent-amber-bg`), mono-font label showing the note title (truncated) in `text-mono`.
-- Hover: a preview popover shows the exact quoted passage from the source note, in `text-body-content` (Source Serif 4), so the user can visually compare "what was claimed" against "what the note actually says" without leaving the artifact.
-- Click: opens the source note (reveal in Finder/Explorer, or open in the user's actual Obsidian app if a path association exists — don't try to reimplement a note viewer, see `rules.md`'s editor-library ban).
-- A citation that failed code-validation never reaches this component in its normal state — it either doesn't render, or renders in a distinct "unverified" visual state (desaturated, no amber, small warning glyph) if you choose to surface failures rather than silently drop them. Pick one behavior and be consistent.
+- Small pill inline with artifact/answer text: green border, `--accent-green-soft` background, mono label with the note title.
+- Hover: popover with the exact quoted passage in serif on white, soft shadow.
+- Click: reveal the source note in Finder/Explorer.
+- A citation that failed code-validation never renders in this state.
 
 ### ToolCallIndicator
-
-- Mono font, small, sits inline in the chat/agent stream: e.g. `search_notes("citation styles") →  4 matches`.
-- While a call is in flight: a subtle amber pulse (opacity breathing, not a spinner icon) — calm, not busy-looking.
-- Always visible, never collapsed by default — hiding tool calls behind a toggle undermines the "it acts, not just answers" differentiator; the acting should be *seen*.
+- Mono, small, tertiary ink, inline in the stream: `search_notes("…") → 5 matches`.
+- While running: amber with a slow opacity pulse (~1.2s) — the only amber in the app.
+- Always visible, never collapsed.
 
 ### EditablePreview
-
-- Elevated surface (`--bg-elevated`), appears as a panel/modal before any `write_note`/`link_notes` commits.
-- Shows the proposed content as an editable text area (plain textarea-level editing, not a rich editor — see `rules.md`), with a clear diff-style affordance if editing an existing note (added lines subtly highlighted, not a full diff library — keep this hand-rolled and simple).
-- Two actions only: **Approve & write** / **Discard**. No silent third path.
+- Modal over a dark scrim: white panel, 12px radius, soft shadow.
+- Eyebrow in green (PROPOSED NEW NOTE / PROPOSED EDIT), path in mono, the "nothing has been written yet" promise as a caption.
+- Added-lines block with a `--state-success` left rule; plain textarea; actions bottom-right — Discard (text) then **Approve & write** (green primary). Two actions only.
 
 ### RecallCard (F2)
-
-- Small, read-only card, `--bg-surface`, no amber (recall is not "the agent acting," it's a passive surface) — reserve amber discipline even here.
-- Max 3 on screen at once, dismissible individually.
-
-### ArtifactView (F1 output)
-
-- `text-body-content` throughout, `text-heading` for section breaks, Citation components inline.
-- "Tensions & Open Questions" section visually set apart — a left border in `--state-warning` (not amber — amber is reserved for citations/agent-activity, this is a content-level flag, different meaning) and a `text-heading` label.
+- On the Ask view only, above the stream: `--bg-wall` cards with hairline borders, 9px radius, max 3, dismiss appears on hover. Path eyebrow in small green mono caps ("RESURFACED" treatment). No amber — recall is passive.
 
 ### CorpusOverview (F6)
+- Fills the reading surface when Corpus is selected: plain hairline-separated list rows — status dot (muted success/warning/error), Inter title, mono path, status label. A file browser, not a graph.
 
-- Plain list/tree, `text-body-ui` + `text-mono` for paths, status dot per note (indexed / stale / error) using the muted status colors. Explicitly not a force-directed graph — resist the pull to make this "look impressive," it should look like a file browser.
+## 6. Motion
 
-## 5. Motion
+- 150–180ms ease-out fades/slides on panel open and hover. No spring/bounce.
+- The one deliberate exception: the amber pulse on running tool calls.
 
-- Minimal and purposeful: 150–200ms, ease-out, on fades/slides for panel open/close and hover states.
-- No spring/bounce easing anywhere — it reads as playful, which fights the research-instrument tone.
-- The one deliberate exception is the amber "thinking" pulse on `ToolCallIndicator` — slow (∼1.2s cycle), subtle opacity breathing, never a spinning icon.
+## 7. Empty / error / loading states
 
-## 6. Empty / error / loading states
+- Empty states: one calm serif sentence explaining what the mode does and the promise that applies ("Nothing is written without your approval"), plus the composer itself. No illustrations, no emoji.
+- Errors: specific and plain-language per `rules.md`'s table, in a `--state-error` left-rule block.
+- Loading: determinate "Indexing N of M files" in the sidebar stats where knowable; amber pulse where not.
 
-- Empty states (no vault picked, no index yet, no recall cards): calm, single-line `text-secondary` copy plus one clear action — never a cutesy illustration or multi-paragraph onboarding wall.
-- Error states: specific and plain-language (see `rules.md`'s error-handling table for what each one actually needs to say) — never a generic "something went wrong."
-- Loading (indexing progress, artifact generation in progress): a determinate progress indicator where the count is knowable (indexing N of M files), and the amber pulse pattern from `ToolCallIndicator` where it isn't.
-- No emoji anywhere in UI copy.
+## 8. Platform chrome
 
-## 7. Platform-specific chrome (Windows + macOS, one Electron codebase)
+- Custom hidden-native titlebar on both platforms (`hiddenInset` on macOS, frameless + custom controls on Windows). Window `backgroundColor` matches `--bg-wall` so there's no flash.
+- macOS traffic lights top-left over the sidebar drag region; Windows min/max/close top-right in the main header.
 
-- Both platforms use a **custom, hidden-native titlebar** (`titleBarStyle: 'hiddenInset'` on macOS, a custom draggable region + custom min/max/close controls on Windows) rather than the OS-default title bar — this keeps the window chrome consistent with the dark theme instead of showing a jarring light-mode default bar.
-- macOS: traffic-light controls stay top-left (native, don't try to relocate them).
-- Windows: custom minimize/maximize/close controls top-right, styled to match — `text-tertiary` icons, hover states in `--bg-elevated`.
-- If time is short (see `phases.md` cut order), falling back to each OS's default titlebar is an acceptable degradation — it's a polish item, not a functional one.
+## 9. Anti-patterns (don't do these)
 
-## 8. Anti-patterns (don't do these)
-
-- Glassmorphism / frosted-glass panels
-- Purple-to-blue gradients
-- Inter-only or Poppins-only typography (the three-font system is the point)
-- Floating blob/organic background shapes
-- Neon glow effects
+- Dark-mode-by-default AI-tool styling — the light room is the identity
+- Glassmorphism, gradients, floating blobs, neon glow
 - Emoji in UI copy
-- More than one amber element competing for attention on screen at once
+- Green or amber used decoratively — both are semantic signals only
+- More than one signal competing for attention at once

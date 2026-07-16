@@ -5,23 +5,30 @@
 @import '@fontsource/source-serif-4/600.css';
 @import '@fontsource/jetbrains-mono/400.css';
 
+/* Reading Room — a warm-white study. Light only.
+   Green is the verification signal (citations, confirmed writes).
+   Amber remains the agent-activity signal (tool calls in flight), nowhere else. */
 :root {
-  --bg-base: #0B0D0F;
-  --bg-surface: #14171A;
-  --bg-elevated: #1C2024;
-  --bg-inset: #0E1012;
-  --bg-scrim: rgb(11 13 15 / 84%);
-  --border-subtle: #2A2F35;
-  --border-strong: #3A4046;
-  --text-primary: #E8E6E1;
-  --text-secondary: #9BA0A6;
-  --text-tertiary: #6B7178;
-  --accent-amber: #D9A441;
-  --accent-amber-dim: #8A6A32;
-  --accent-amber-bg: #2A2213;
-  --state-success: #7A9B76;
-  --state-error: #B56A5C;
-  --state-warning: #C9A45C;
+  --bg-wall: #F7F6F2;      /* window ground, sidebar, composer */
+  --bg-panel: #FFFFFF;     /* reading surface, cards, modals */
+  --bg-inset: #F1EFEA;     /* mono blocks, inputs on panel */
+  --bg-scrim: rgb(34 36 42 / 42%);
+
+  --border-subtle: #E4E2DC;
+  --border-strong: #CBC8C0;
+
+  --text-primary: #22242A;
+  --text-secondary: #6E7076;
+  --text-tertiary: #989A9F;
+
+  --accent-green: #31614C;       /* citations, primary actions, verification */
+  --accent-green-soft: #EAF0EC;  /* citation chip / selected nav background */
+  --accent-amber: #B0813B;       /* the agent acting — tool-call pulse only */
+
+  --state-success: #4C7A5C;
+  --state-error: #A94F42;
+  --state-warning: #A87F34;
+
   --font-ui: 'Inter', system-ui, sans-serif;
   --font-content: 'Source Serif 4', Georgia, serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', monospace;

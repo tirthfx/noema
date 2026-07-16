@@ -60,8 +60,8 @@ export default function EditablePreview({ proposal, onWritten, onDiscard }: {
       {error && <p className="error-copy" role="alert">{error}</p>}
 
       <div className="preview-actions">
-        <button className="primary-action" onClick={() => void approve()} disabled={writing || !content.trim()}>{writing ? 'Writing…' : 'Approve & write'}</button>
         <button className="secondary-action" onClick={onDiscard} disabled={writing}>Discard</button>
+        <button className="primary-action" onClick={() => void approve()} disabled={writing || !content.trim()}>{writing ? 'Writing…' : 'Approve & write'}</button>
       </div>
     </section>
   )

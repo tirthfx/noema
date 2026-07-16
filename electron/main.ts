@@ -11,7 +11,7 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 560,
     show: false,
-    backgroundColor: '#0B0D0F',
+    backgroundColor: '#F7F6F2',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     frame: process.platform === 'win32' ? false : undefined,
     webPreferences: {
