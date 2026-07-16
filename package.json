@@ -9,6 +9,8 @@
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build && electron-builder",
     "build:unpack": "npm run typecheck && electron-vite build && electron-builder --dir",
+    "package:mac": "npm run typecheck && electron-vite build && electron-builder --mac --arm64 --x64",
+    "package:win": "npm run typecheck && electron-vite build && electron-builder --win --x64",
     "smoke:index": "electron-vite build && node out/main/phase1-smoke.js",
     "smoke:local": "electron-vite build && node out/main/phase0-smoke.js",
     "smoke:artifact": "electron-vite build && node out/main/phase3-smoke.js",

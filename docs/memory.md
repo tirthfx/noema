@@ -10,13 +10,13 @@ This is a clean restart. Full pre-restart history (naming journey, the original 
 
 **Restart date:** 16 Jul 2026
 **Deadline:** 21 Jul 2026, 5:00 PM PT / 22 Jul 2026, 5:30 AM IST
-**Current phase:** Phase 7 complete. Phase 8 (cross-platform packaging) is next.
+**Current phase:** Phase 8 complete. Phase 9 (demo video, README, submission) is next.
 
 ## Currently working on
 
 > Update this line every session. Example: `Phase 1 — resolving which NIM model to use for embeddings (architecture.md §6 open item).`
 
-Phase 8 — Cross-platform packaging.
+Phase 9 — Demo video, README, and submission.
 
 ---
 
@@ -32,7 +32,7 @@ Mirrors `phases.md`. Check off acceptance criteria, not just "touched the code."
 - [x] **Phase 5** — Capture & auto-file (text/URL capture, editable preview, approved writes; **PDF capture cut — see D17**)
 - [x] **Phase 6** — Proactive recall + seed data (deterministic demo vault with a real tension and a real hidden connection)
 - [x] **Phase 7** — Corpus overview + polish pass (F6 list/tree, indexed/stale/error state, determinate index progress, error/empty/loading/motion/amber audit; custom titlebar retained)
-- [ ] **Phase 8** — Cross-platform packaging (electron-builder, both unsigned, GitHub Actions dual-runner build, README run instructions)
+- [x] **Phase 8** — Cross-platform packaging (unsigned macOS arm64/x64 DMG + ZIP and Windows x64 NSIS + portable targets; GitHub Actions dual-runner workflow at `.github/workflows/package.yml`; README run instructions)
 - [ ] **Phase 9** — Demo video, README, submission
 
 ## Open technical items (resolve before/during the phase noted)
@@ -67,6 +67,7 @@ Mirrors `phases.md`. Check off acceptance criteria, not just "touched the code."
 | D18 | Recall the first three indexed note paths, dismissible for the current renderer session | This deterministic index-backed heuristic guarantees a repeatable demo without model calls or recommendation-system complexity; cards are read-only. |
 | D19 | Retain the custom hidden-native titlebar on both platforms | The existing implementation already meets `design.md` §7: `hiddenInset` leaves macOS traffic lights native at top-left, while Windows uses the themed custom minimize/maximize/close controls at top-right. No fallback to OS-default chrome was needed. |
 | D20 | **Full visual redesign to "Reading Room": light warm-paper theme, sidebar navigation, green = verified / amber = agent-acting signal split.** Supersedes the dark research-instrument spec | Tirth rejected the dark look wholesale after Phase 7. Three same-screen mockups were pitched (light/bookish, dark/dense, archival/stamped); he chose the light one. A light app also differentiates against a field of dark AI tools. `design.md` was rewritten in the same session so the docs never describe a UI that no longer exists. |
+| D21 | Package natively in CI: macOS arm64/x64 DMG + ZIP; Windows x64 NSIS + portable EXE | The `macos-latest` and `windows-latest` workflow jobs avoid cross-compilation and create the unsigned delivery formats documented in the README. |
 
 *(Add D13+ here as new decisions get made — never renumber or delete existing ones.)*
 
@@ -129,6 +130,8 @@ Deferred to Phase 7 polish (not Phase 5 acceptance): the `EditablePreview` panel
 **16 Jul 2026** — Full visual redesign: **Reading Room** (D20). Tirth rejected the dark research-instrument look outright after Phase 7 ("change the design completely"). Three directions were pitched as same-screen HTML mockups — A: Reading Room (light, bookish, sidebar), B: Instrument Panel (dark, dense, Linear-like), C: Card Catalogue (bone, archival, stamped) — and A was chosen. Implemented across `tokens.css` (new warm-paper palette), `app.css` (sidebar layout replacing the single column and composer tabs), `App.tsx` (five-mode sidebar nav: Ask/Review/Capture/Link/Corpus; Corpus is now a full view, not an inline panel; per-mode serif guidance in empty states), `EditablePreview` (white modal, green eyebrow), and `main.ts` (`backgroundColor` now matches `--bg-wall`, no dark flash). Signal semantics split: **green = verified** (citations, approvals, primary actions), **amber = agent acting** (tool-call pulse only) — previously amber carried both meanings. `design.md` rewritten to describe Reading Room; the old dark spec is superseded. Verified: strict TypeScript on both configs, and the live desktop app (sidebar nav, mode switching, per-mode composers, capture view). The design-pitch page lives at `scratchpad` (session-local) and as a private artifact. **Not yet committed — Tirth commits via Codex; nothing here has a trailer to worry about.**
 
 **16 Jul 2026** — Phase 7 complete (F6, Corpus overview + polish). Added `CorpusOverview` as a plain, file-browser-style list of vault Markdown notes with muted indexed/stale/error dots; it deliberately has no graph behavior or dependency. The index now reports determinate `N of M files` progress through the typed Electron bridge, and identifies the individual note that fails during a refresh. Polished the empty state to one calm action, made the write preview a reachable overlay panel, audited UI error fallbacks for action-specific language, kept all amber limited to active tool calls and citations, and confirmed there is no emoji UI copy. The deterministic Phase 6 demo corpus remains at repository `seed-vault/`; its recall heuristic remains the first three indexed note paths, dismissible for the current renderer session (D18). Retained the already-built custom titlebar rather than falling back to OS defaults (D19). TypeScript, the local smoke suite, and an unpacked production build pass. Next: Phase 8 packaging.
+
+**16 Jul 2026** — Phase 8 complete (cross-platform packaging). Configured unsigned electron-builder targets for macOS **arm64 and x64** (`.dmg` and `.zip`) and Windows **x64** (NSIS installer `.exe` and portable `.exe`), with deterministic platform/architecture artifact names. Added `.github/workflows/package.yml`: native `macos-latest` and `windows-latest` jobs each run `npm ci`, `npm run typecheck`, native Electron builds, and upload their installers as workflow artifacts. The README now gives judges plain Gatekeeper and SmartScreen bypass steps for unsigned downloads. Local verification passed `npm run typecheck`, `npm run smoke:local`, and a full unsigned macOS package build, producing `Noema-0.1.0-mac-arm64.{dmg,zip}` and `Noema-0.1.0-mac-x64.{dmg,zip}`; the ARM64 packaged app launched and stayed running for 8 seconds. Built-output audit confirmed the Reading Room `#F7F6F2` background, custom hidden-native titlebar settings, `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, bundled local Inter/Source Serif/JetBrains Mono fonts, and no renderer `ipcRenderer` access. There is no auto-updater runtime or configuration. The committed workflow still needs its first push/run to generate the native Windows artifact and complete the clean-machine, all-five-mode, NIM-backed manual acceptance pass; that cannot be truthfully verified from this Mac while the NIM free-tier endpoint is unavailable. Next: Phase 9 — record the demo once the workflow artifacts and NIM quota are available.
 
 ---
 
