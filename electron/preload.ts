@@ -15,7 +15,13 @@ const noema: NoemaApi = {
   recall: { get: () => ipcRenderer.invoke('recall:get') },
   index: {
     status: () => ipcRenderer.invoke('index:status'),
-    rebuild: () => ipcRenderer.invoke('index:rebuild')
+    rebuild: () => ipcRenderer.invoke('index:rebuild'),
+    getCorpus: () => ipcRenderer.invoke('index:get-corpus'),
+    onProgress: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: Parameters<typeof listener>[0]) => listener(progress)
+      ipcRenderer.on('index:progress', handler)
+      return () => ipcRenderer.removeListener('index:progress', handler)
+    }
   },
   tools: {
     searchNotes: (query, topK) => ipcRenderer.invoke('tools:search-notes', query, topK),

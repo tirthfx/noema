@@ -10,13 +10,13 @@ This is a clean restart. Full pre-restart history (naming journey, the original 
 
 **Restart date:** 16 Jul 2026
 **Deadline:** 21 Jul 2026, 5:00 PM PT / 22 Jul 2026, 5:30 AM IST
-**Current phase:** Phase 6 complete. Phase 7 (Corpus overview + polish) is next.
+**Current phase:** Phase 7 complete. Phase 8 (cross-platform packaging) is next.
 
 ## Currently working on
 
 > Update this line every session. Example: `Phase 1 — resolving which NIM model to use for embeddings (architecture.md §6 open item).`
 
-Phase 7 — Corpus overview and polish.
+Phase 8 — Cross-platform packaging.
 
 ---
 
@@ -31,7 +31,7 @@ Mirrors `phases.md`. Check off acceptance criteria, not just "touched the code."
 - [x] **Phase 4** — Ask-your-knowledge (grounded Q&A, refusal path)
 - [x] **Phase 5** — Capture & auto-file (text/URL capture, editable preview, approved writes; **PDF capture cut — see D17**)
 - [x] **Phase 6** — Proactive recall + seed data (deterministic demo vault with a real tension and a real hidden connection)
-- [ ] **Phase 7** — Corpus overview + polish pass
+- [x] **Phase 7** — Corpus overview + polish pass (F6 list/tree, indexed/stale/error state, determinate index progress, error/empty/loading/motion/amber audit; custom titlebar retained)
 - [ ] **Phase 8** — Cross-platform packaging (electron-builder, both unsigned, GitHub Actions dual-runner build, README run instructions)
 - [ ] **Phase 9** — Demo video, README, submission
 
@@ -65,6 +65,7 @@ Mirrors `phases.md`. Check off acceptance criteria, not just "touched the code."
 | D16 | `link_notes` ships as a deterministic proposal builder invoked from the UI (explicit from-note, to-note, context), **not** yet as a model-callable tool, despite `architecture.md` §5 listing it in the tool table | Phase 5's requirement is the approval gate, which this satisfies exactly — and a deterministic trigger is demoable and testable without model latency or a model choosing note pairs at random. The agent originating link suggestions is F5 (Hidden connections), a Should-have; wiring `link_notes` into the loop's existing gated-tool path is a small add when F5 lands. The gate itself is already generic: `GATED_TOOLS` covers both names, and `tools/link-notes.ts` cannot write regardless of caller. |
 | D17 | **PDF capture cut from Phase 5** | `phases.md` marks it "only if time allows" and puts it behind text and URL in the cut order. Text and URL capture are both built and verified. Every JS-only PDF text extractor is a real dependency to run through the scope-creep test, and the session's remaining budget went to correcting D15's misdiagnosis. Text + URL fully satisfy F3's acceptance criteria. Revisit only after Phase 8 packaging is safe. |
 | D18 | Recall the first three indexed note paths, dismissible for the current renderer session | This deterministic index-backed heuristic guarantees a repeatable demo without model calls or recommendation-system complexity; cards are read-only. |
+| D19 | Retain the custom hidden-native titlebar on both platforms | The existing implementation already meets `design.md` §7: `hiddenInset` leaves macOS traffic lights native at top-left, while Windows uses the themed custom minimize/maximize/close controls at top-right. No fallback to OS-default chrome was needed. |
 
 *(Add D13+ here as new decisions get made — never renumber or delete existing ones.)*
 
@@ -123,6 +124,8 @@ Mirrors `phases.md`. Check off acceptance criteria, not just "touched the code."
 Verified end-to-end in the real app: capture of `https://en.wikipedia.org/wiki/Spaced_repetition` produced a clean 7.7KB draft, correctly filed into the vault's existing `Learning/` folder, with the source URL preserved; **disk confirmed empty of it while the proposal sat open**; approving wrote it and the index moved 46 notes/359 chunks → 47/364 via the post-write refresh; a `link_notes` proposal rendered `PROPOSED EDIT` with the hand-rolled "Adds to the existing note" highlight and left the target note byte-identical (7722 bytes, 0 wikilinks) both while open and after Discard. `smoke:capture` and `smoke:artifact` re-pass after all four fixes; **`smoke:answer` could not be re-run — `glm-5.2`'s quota was exhausted by this session (D15 confirmed a third time), so Phase 4 remains verified only as of before the `index.ts` refactor.** Phase 3 exercises the same load/refresh and tool-loop paths and passed after it. Re-run `npm run smoke:answer` once quota recovers.
 
 Deferred to Phase 7 polish (not Phase 5 acceptance): the `EditablePreview` panel is taller than the message-list viewport, and the textarea swallows wheel events, so reaching Approve/Discard needs a scroll started outside the textarea — design.md calls the component a "panel/modal", and promoting it to a real overlay would fix both. Also, a focused capture `<select>` draws a macOS system-accent focus ring, which reads as amber on this machine and could collide with design.md's amber discipline; it is the OS accent (blue by default), not a Noema token, so it will not appear amber on most machines.
+
+**16 Jul 2026** — Phase 7 complete (F6, Corpus overview + polish). Added `CorpusOverview` as a plain, file-browser-style list of vault Markdown notes with muted indexed/stale/error dots; it deliberately has no graph behavior or dependency. The index now reports determinate `N of M files` progress through the typed Electron bridge, and identifies the individual note that fails during a refresh. Polished the empty state to one calm action, made the write preview a reachable overlay panel, audited UI error fallbacks for action-specific language, kept all amber limited to active tool calls and citations, and confirmed there is no emoji UI copy. The deterministic Phase 6 demo corpus remains at repository `seed-vault/`; its recall heuristic remains the first three indexed note paths, dismissible for the current renderer session (D18). Retained the already-built custom titlebar rather than falling back to OS defaults (D19). TypeScript, the local smoke suite, and an unpacked production build pass. Next: Phase 8 packaging.
 
 ---
 

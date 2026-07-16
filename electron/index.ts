@@ -1,7 +1,7 @@
 import { readFile, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { IndexRecord, IndexStatus, RecallItem, SearchMatch } from '../shared/types'
+import type { CorpusNote, IndexProgress, IndexRecord, IndexStatus, RecallItem, SearchMatch } from '../shared/types'
 import { basename } from 'node:path'
 import { chunkMarkdown, readVaultNote, walkMarkdownFiles } from './vault'
 
@@ -65,7 +65,9 @@ async function nimFetch(path: string, body: Record<string, unknown>): Promise<Re
       lastError = new NimApiError(`NIM request failed with HTTP ${response.status}.`, response.status)
       if (attempt === 0) await retryDelay(response)
     } catch (error) {
-      lastError = error instanceof Error ? error : new Error('NIM request failed.')
+      lastError = error instanceof Error && error.name === 'TimeoutError'
+        ? new NimApiError('NIM request timed out.')
+        : error instanceof Error ? error : new NimApiError('NIM request failed before a response was received.')
     }
   }
   throw new NimApiError(`NIM request failed after one retry: ${lastError?.message ?? 'unknown error'}`)
@@ -107,6 +109,7 @@ export class VaultIndex {
   private records: IndexRecord[] = []
   private loading: Promise<void> | null = null
   private needsRebuild = false
+  private failedNotePath: string | null = null
   /** Serialises refresh(); concurrent refreshes would race on the same temp file. */
   private queue: Promise<unknown> = Promise.resolve()
 
@@ -146,16 +149,17 @@ export class VaultIndex {
    * Queued rather than coalesced: a refresh requested after an approved write must observe
    * that new note, so it waits for any in-flight refresh instead of joining it.
    */
-  async refresh(): Promise<IndexStatus> {
-    const run = this.queue.then(() => this.performRefresh(), () => this.performRefresh())
+  async refresh(onProgress?: (progress: IndexProgress) => void): Promise<IndexStatus> {
+    const run = this.queue.then(() => this.performRefresh(onProgress), () => this.performRefresh(onProgress))
     this.queue = run.catch(() => undefined)
     return run
   }
 
-  private async performRefresh(): Promise<IndexStatus> {
+  private async performRefresh(onProgress?: (progress: IndexProgress) => void): Promise<IndexStatus> {
     await this.load()
     const originalRecords = this.records
     const rebuildAll = this.needsRebuild
+    let activeNotePath: string | null = null
     try {
       const notes = await walkMarkdownFiles(this.vaultPath)
       const noteMtimes = new Map(notes.map((note) => [note.path, note.mtime]))
@@ -169,20 +173,32 @@ export class VaultIndex {
       const nextRecords = originalRecords.filter((record) => !stalePaths.has(record.notePath) && noteMtimes.has(record.notePath))
       const removedChunks = originalRecords.length - nextRecords.length
       let embeddedChunks = 0
+      let processedFiles = 0
+      onProgress?.({ processedFiles, totalFiles: notes.length })
 
-      for (const note of notes.filter((candidate) => stalePaths.has(candidate.path))) {
-        const content = await readVaultNote(this.vaultPath, note.path)
-        if (content === null) continue
-        for (const chunk of chunkMarkdown(content)) {
-          nextRecords.push({
-            notePath: note.path,
-            chunkId: chunk.id,
-            text: chunk.text,
-            embedding: await embed(chunk.text, 'passage'),
-            mtime: note.mtime
-          })
-          embeddedChunks += 1
+      for (const note of notes) {
+        if (!stalePaths.has(note.path)) {
+          processedFiles += 1
+          onProgress?.({ processedFiles, totalFiles: notes.length })
+          continue
         }
+        activeNotePath = note.path
+        const content = await readVaultNote(this.vaultPath, note.path)
+        if (content !== null) {
+          for (const chunk of chunkMarkdown(content)) {
+            nextRecords.push({
+              notePath: note.path,
+              chunkId: chunk.id,
+              text: chunk.text,
+              embedding: await embed(chunk.text, 'passage'),
+              mtime: note.mtime
+            })
+            embeddedChunks += 1
+          }
+        }
+        processedFiles += 1
+        onProgress?.({ processedFiles, totalFiles: notes.length })
+        activeNotePath = null
       }
 
       await mkdir(join(this.vaultPath, '.noema'), { recursive: true })
@@ -199,10 +215,12 @@ export class VaultIndex {
       }
       this.records = nextRecords
       this.needsRebuild = false
+      this.failedNotePath = null
       return this.status(embeddedChunks, removedChunks)
     } catch (error) {
       this.records = originalRecords
       this.needsRebuild = true
+      this.failedNotePath = activeNotePath
       throw error
     }
   }
@@ -227,6 +245,18 @@ export class VaultIndex {
     const seen = new Set<string>()
     return this.records.filter((record) => !seen.has(record.notePath) && Boolean(seen.add(record.notePath))).slice(0, 3)
       .map((record) => ({ path: record.notePath, title: basename(record.notePath, '.md'), excerpt: record.text.replace(/^#.+\n?/, '').slice(0, 180) }))
+  }
+
+  async getCorpus(): Promise<CorpusNote[]> {
+    await this.load()
+    const notes = await walkMarkdownFiles(this.vaultPath)
+    const indexedMtimes = new Map<string, number>()
+    for (const record of this.records) indexedMtimes.set(record.notePath, record.mtime)
+    return notes.map((note) => ({
+      path: note.path,
+      title: basename(note.path, '.md'),
+      status: this.failedNotePath === note.path ? 'error' : this.needsRebuild || indexedMtimes.get(note.path) !== note.mtime ? 'stale' : 'indexed'
+    }))
   }
 
   private status(embeddedChunks: number, removedChunks: number): IndexStatus {

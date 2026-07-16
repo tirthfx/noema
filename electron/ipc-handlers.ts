@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } fr
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { IndexStatus, VaultConfig, VaultSelection, WriteResult } from '../shared/types'
+import type { IndexProgress, IndexStatus, VaultConfig, VaultSelection, WriteResult } from '../shared/types'
 import { getVaultIndex } from './index'
 import { listNotes } from './tools/list-notes'
 import { readNote } from './tools/read-note'
@@ -44,18 +44,18 @@ async function isReadableDirectory(path: string): Promise<boolean> {
   }
 }
 
-async function saveVault(vaultPath: string): Promise<VaultSelection> {
+async function saveVault(vaultPath: string, onProgress?: (progress: IndexProgress) => void): Promise<VaultSelection> {
   const noemaPath = join(vaultPath, '.noema')
   await mkdir(noemaPath, { recursive: true })
   const config: VaultConfig = { vaultPath }
   await writeFile(join(noemaPath, 'config.json'), `${JSON.stringify(config, null, 2)}\n`, 'utf8')
   await writeFile(lastVaultPointerPath(), `${JSON.stringify(config, null, 2)}\n`, 'utf8')
-  return { vaultPath, indexStatus: await refreshIndex(vaultPath) }
+  return { vaultPath, indexStatus: await refreshIndex(vaultPath, onProgress) }
 }
 
-async function refreshIndex(vaultPath: string): Promise<IndexStatus> {
+async function refreshIndex(vaultPath: string, onProgress?: (progress: IndexProgress) => void): Promise<IndexStatus> {
   try {
-    return await getVaultIndex(vaultPath).refresh()
+    return await getVaultIndex(vaultPath).refresh(onProgress)
   } catch (error) {
     const existing = await getVaultIndex(vaultPath).getStatus()
     return {
@@ -68,9 +68,9 @@ async function refreshIndex(vaultPath: string): Promise<IndexStatus> {
   }
 }
 
-async function getSavedVault(): Promise<VaultSelection | null> {
+async function getSavedVault(onProgress?: (progress: IndexProgress) => void): Promise<VaultSelection | null> {
   const vault = await findSavedVault()
-  return vault ? { ...vault, indexStatus: await refreshIndex(vault.vaultPath) } : null
+  return vault ? { ...vault, indexStatus: await refreshIndex(vault.vaultPath, onProgress) } : null
 }
 
 async function findSavedVault(): Promise<VaultSelection | null> {
@@ -81,8 +81,8 @@ async function findSavedVault(): Promise<VaultSelection | null> {
 }
 
 export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
-  ipcMain.handle('vault:get-saved', getSavedVault)
-  ipcMain.handle('vault:choose', async () => {
+  ipcMain.handle('vault:get-saved', (event) => getSavedVault((progress) => event.sender.send('index:progress', progress)))
+  ipcMain.handle('vault:choose', async (event) => {
     const options: OpenDialogOptions = {
       title: 'Choose an Obsidian vault folder',
       properties: ['openDirectory', 'createDirectory']
@@ -92,7 +92,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
       ? await dialog.showOpenDialog(window, options)
       : await dialog.showOpenDialog(options)
     if (result.canceled || result.filePaths.length === 0) return null
-    return saveVault(result.filePaths[0])
+    return saveVault(result.filePaths[0], (progress) => event.sender.send('index:progress', progress))
   })
   ipcMain.handle('vault:reveal-note', async (_event, path: unknown) => {
     if (typeof path !== 'string') return
@@ -146,10 +146,14 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     const vault = await findSavedVault()
     return vault ? getVaultIndex(vault.vaultPath).getStatus() : null
   })
-  ipcMain.handle('index:rebuild', async () => {
+  ipcMain.handle('index:rebuild', async (event) => {
     const vault = await findSavedVault()
     if (!vault) throw new Error('Choose a vault before building an index.')
-    return refreshIndex(vault.vaultPath)
+    return refreshIndex(vault.vaultPath, (progress) => event.sender.send('index:progress', progress))
+  })
+  ipcMain.handle('index:get-corpus', async () => {
+    const vault = await findSavedVault()
+    return vault ? getVaultIndex(vault.vaultPath).getCorpus() : []
   })
   ipcMain.handle('recall:get', async () => {
     const vault = await findSavedVault()

@@ -24,6 +24,11 @@ export interface IndexStatus {
   error?: string
 }
 
+export interface IndexProgress {
+  processedFiles: number
+  totalFiles: number
+}
+
 export interface SearchMatch {
   notePath: string
   chunkId: string
@@ -35,6 +40,7 @@ export interface NoteSummary {
   path: string
   title: string
 }
+export interface CorpusNote extends NoteSummary { status: 'indexed' | 'stale' | 'error' }
 export interface RecallItem extends NoteSummary { excerpt: string }
 
 export interface ToolCallActivity {
@@ -95,6 +101,8 @@ export interface NoemaApi {
   index: {
     status: () => Promise<IndexStatus | null>
     rebuild: () => Promise<IndexStatus>
+    getCorpus: () => Promise<CorpusNote[]>
+    onProgress: (listener: (progress: IndexProgress) => void) => () => void
   }
   tools: {
     searchNotes: (query: string, topK?: number) => Promise<SearchMatch[]>
