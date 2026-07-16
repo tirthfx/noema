@@ -1,15 +1,28 @@
 import { app, BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron'
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import type { IndexStatus, VaultConfig, VaultSelection, WriteResult } from '../shared/types'
 import { getVaultIndex } from './index'
 import { listNotes } from './tools/list-notes'
 import { readNote } from './tools/read-note'
 import { searchNotes } from './tools/search-notes'
 import { answerQuestion, generateArtifact, proposeCapture, proposeLink, sendAgentMessage } from './agent'
-import { describeWriteFailure, resolveVaultPath, writeVaultNote } from './vault'
+import { describeWriteFailure, readVaultNote, resolveExistingVaultPath, writeVaultNote } from './vault'
 
 const LAST_VAULT_FILE = 'last-vault.json'
+const PROPOSAL_TTL_MS = 30 * 60 * 1_000
+
+type PendingProposal = { vaultPath: string; path: string; kind: 'new' | 'edit'; baseContent?: string; expiresAt: number }
+const pendingProposals = new Map<string, PendingProposal>()
+
+function rememberProposal(vaultPath: string, proposal: import('../shared/types').NoteProposal): import('../shared/types').NoteProposal {
+  const now = Date.now()
+  for (const [id, pending] of pendingProposals) if (pending.expiresAt <= now) pendingProposals.delete(id)
+  const approvalId = randomUUID()
+  pendingProposals.set(approvalId, { vaultPath, path: proposal.path, kind: proposal.kind, baseContent: proposal.baseContent, expiresAt: now + PROPOSAL_TTL_MS })
+  return { ...proposal, approvalId }
+}
 
 function lastVaultPointerPath(): string {
   return join(app.getPath('userData'), LAST_VAULT_FILE)
@@ -83,22 +96,29 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   })
   ipcMain.handle('vault:reveal-note', async (_event, path: unknown) => {
     if (typeof path !== 'string') return
-    const vault = await findSavedVault(); const fullPath = vault ? resolveVaultPath(vault.vaultPath, path) : null
+    const vault = await findSavedVault(); const fullPath = vault ? await resolveExistingVaultPath(vault.vaultPath, path) : null
     if (fullPath) shell.showItemInFolder(fullPath)
   })
   // The only path in the app from a proposal to disk. Reached exclusively by an approved
   // EditablePreview commit (rules.md §4); fs failures come back as a specific, visible error.
   ipcMain.handle('vault:approve-write', async (_event, proposal: unknown): Promise<WriteResult> => {
     if (!proposal || typeof proposal !== 'object') return { ok: false, error: 'Invalid note proposal.' }
-    const value = proposal as { path?: unknown; content?: unknown }
-    if (typeof value.path !== 'string' || !value.path.trim() || typeof value.content !== 'string') return { ok: false, error: 'Invalid note proposal.' }
+    const value = proposal as { approvalId?: unknown; path?: unknown; content?: unknown }
+    if (typeof value.approvalId !== 'string' || typeof value.path !== 'string' || !value.path.trim() || typeof value.content !== 'string') return { ok: false, error: 'Invalid note proposal.' }
     const vault = await findSavedVault()
     if (!vault) return { ok: false, error: 'Choose a vault before writing.' }
+    const pending = pendingProposals.get(value.approvalId)
+    if (!pending || pending.expiresAt <= Date.now() || pending.vaultPath !== vault.vaultPath || pending.path !== value.path) return { ok: false, error: 'This draft is no longer valid. Propose it again before writing.' }
+    if (pending.kind === 'edit') {
+      const current = await readVaultNote(vault.vaultPath, value.path)
+      if (current === null || current !== pending.baseContent) return { ok: false, error: 'This note changed after the draft was created. Propose the edit again so you do not overwrite newer work.' }
+    }
     try {
       await writeVaultNote(vault.vaultPath, value.path, value.content)
     } catch (error) {
       return { ok: false, error: describeWriteFailure(error, value.path) }
     }
+    pendingProposals.delete(value.approvalId)
     // Fold the approved note into the index so it is searchable without a manual rebuild.
     try {
       await getVaultIndex(vault.vaultPath).refresh()
@@ -112,13 +132,15 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     const value = input as { kind?: unknown; value?: unknown }
     if ((value.kind !== 'text' && value.kind !== 'url') || typeof value.value !== 'string' || !value.value.trim()) throw new Error('Paste text or a URL before capturing it.')
     const vault = await findSavedVault(); if (!vault) throw new Error('Choose and index a vault before capturing into it.')
-    return proposeCapture(vault.vaultPath, { kind: value.kind, value: value.value }, (activity) => event.sender.send('agent:tool-call-activity', activity))
+    const result = await proposeCapture(vault.vaultPath, { kind: value.kind, value: value.value }, (activity) => event.sender.send('agent:tool-call-activity', activity))
+    return result.proposal ? { ...result, proposal: rememberProposal(vault.vaultPath, result.proposal) } : result
   })
   ipcMain.handle('capture:propose-link', async (event, fromPath: unknown, toPath: unknown, context: unknown) => {
     if (typeof fromPath !== 'string' || typeof toPath !== 'string' || !fromPath.trim() || !toPath.trim()) throw new Error('Choose both notes before proposing a link.')
     if (context !== undefined && typeof context !== 'string') throw new Error('Invalid link context.')
     const vault = await findSavedVault(); if (!vault) throw new Error('Choose a vault before proposing a link.')
-    return proposeLink(vault.vaultPath, fromPath, toPath, context ?? '', (activity) => event.sender.send('agent:tool-call-activity', activity))
+    const result = await proposeLink(vault.vaultPath, fromPath, toPath, context ?? '', (activity) => event.sender.send('agent:tool-call-activity', activity))
+    return result.proposal ? { ...result, proposal: rememberProposal(vault.vaultPath, result.proposal) } : result
   })
   ipcMain.handle('index:status', async () => {
     const vault = await findSavedVault()

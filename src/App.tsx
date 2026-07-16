@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, useEffect, useRef, useState } from 'react'
 import type { AgentResult, Artifact, CaptureKind, GroundedAnswer, NoteProposal, NoteSummary, Persona, RecallItem, ToolCallActivity, VaultSelection } from '../shared/types'
 import ToolCallIndicator from './components/ToolCallIndicator'
 import ArtifactView from './components/ArtifactView'
@@ -49,9 +49,13 @@ export default function App() {
   const [linkTo, setLinkTo] = useState('')
   const [linkContext, setLinkContext] = useState('')
   const [recalls, setRecalls] = useState<RecallItem[]>([])
+  const initialized = useRef(false)
 
   useEffect(() => {
-    window.noema.vault.getSaved().then(async (saved) => { setVault(saved); if (saved) setRecalls(await window.noema.recall.get()) }).catch(() => setError('Noema could not read the previously selected vault. Choose it again to continue.')).finally(() => setLoading(false))
+    if (!initialized.current) {
+      initialized.current = true
+      window.noema.vault.getSaved().then(async (saved) => { setVault(saved); if (saved) setRecalls(await window.noema.recall.get()) }).catch(() => setError('Noema could not read the previously selected vault. Choose it again to continue.')).finally(() => setLoading(false))
+    }
     return window.noema.agent.onToolCallActivity((activity) => {
       setEntries((current) => {
         const existing = current.findIndex((entry) => entry.kind === 'tool' && entry.value.id === activity.id)
@@ -64,7 +68,13 @@ export default function App() {
 
   async function chooseVault(): Promise<void> {
     setSelecting(true); setError(null)
-    try { setVault(await window.noema.vault.choose()) } catch (reason) { setError(reason instanceof Error ? reason.message : 'Noema could not save the selected vault.') } finally { setSelecting(false) }
+    try {
+      const selected = await window.noema.vault.choose()
+      if (selected) {
+        setVault(selected); setEntries([]); setArtifact(null); setProposal(null); setWrittenPath(null); setChatError(null); setLinkFrom(''); setLinkTo(''); setLinkContext('')
+        setRecalls(await window.noema.recall.get())
+      }
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Noema could not save the selected vault.') } finally { setSelecting(false) }
   }
 
   async function rebuildIndex(): Promise<void> {
@@ -143,7 +153,7 @@ export default function App() {
       <section className="content">
         {loading ? <p className="status-copy">Opening your research workspace…</p> : vault ? (
           <div className="chat-shell">
-            <div className="chat-header"><p className="eyebrow">VAULT CONNECTED</p><p className="index-summary">{vault.indexStatus ? `${vault.indexStatus.indexedNotes} notes · ${vault.indexStatus.indexedChunks} chunks` : 'Index status unavailable'}</p></div>
+            <div className="chat-header"><p className="eyebrow">VAULT CONNECTED</p><div className="vault-header-actions"><p className="index-summary">{vault.indexStatus ? `${vault.indexStatus.indexedNotes} notes · ${vault.indexStatus.indexedChunks} chunks` : 'Index status unavailable'}</p><button className="secondary-action" onClick={() => void chooseVault()} disabled={selecting}>{selecting ? 'Choosing…' : 'Choose another vault'}</button></div></div>
             {vault.indexStatus?.error && <div className="index-error"><p className="error-copy" role="alert">{vault.indexStatus.error}</p><button className="secondary-action" onClick={() => void rebuildIndex()} disabled={rebuilding}>{rebuilding ? 'Rebuilding index…' : 'Retry indexing'}</button></div>}
             {recalls.length > 0 && <section className="recalls">{recalls.map((item) => <RecallCard item={item} key={item.path} onDismiss={() => setRecalls((current) => current.filter((card) => card.path !== item.path))} />)}</section>}
             <form className="artifact-controls" onSubmit={generateArtifact}><input value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="Literature-review topic" disabled={generating} /><select value={persona} onChange={(event) => setPersona(event.target.value as Persona)} disabled={generating}><option>Academic</option><option>Socratic Critic</option><option>Plain-Language</option></select><button className="secondary-action" disabled={generating || !topic.trim()}>{generating ? 'Contacting NIM…' : 'Generate review'}</button></form>

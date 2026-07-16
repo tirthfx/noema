@@ -48,6 +48,7 @@ h1 { margin: 0; color: var(--text-primary); font: 600 28px/36px var(--font-conte
 .chat-header { display: flex; justify-content: space-between; align-items: baseline; padding: 18px 20px; border-bottom: 1px solid var(--border-subtle); }
 .chat-header .eyebrow { margin: 0; }
 .index-summary { margin: 0; color: var(--text-tertiary); font: 400 12px/16px var(--font-mono); }
+.vault-header-actions { display: flex; align-items: center; gap: 10px; }.vault-header-actions .secondary-action { margin: 0; }
 .index-error { padding: 0 20px 14px; border-bottom: 1px solid var(--border-subtle); }
 .recalls { display: flex; gap: 10px; padding: 12px 20px; overflow-x: auto; border-bottom: 1px solid var(--border-subtle); }.recall-card { position: relative; min-width: 210px; padding: 10px; border: 1px solid var(--border-subtle); background: var(--bg-surface); }.recall-card button { position: absolute; top: 4px; right: 6px; border: 0; background: transparent; color: var(--text-tertiary); cursor: pointer; }.recall-card h2 { margin: 4px 0; font: 500 14px/20px var(--font-ui); }.recall-card p { margin: 0; color: var(--text-secondary); font: 400 12px/16px var(--font-ui); }.recall-path { font-family: var(--font-mono) !important; color: var(--text-tertiary) !important; }
 .artifact-controls { display: flex; gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--border-subtle); }

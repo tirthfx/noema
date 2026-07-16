@@ -58,6 +58,8 @@ export interface AgentResult {
  * EditablePreview highlight added lines without a diff library.
  */
 export interface NoteProposal {
+  /** Opaque main-process token required to commit this specific reviewed proposal. */
+  approvalId?: string
   path: string
   content: string
   kind: 'new' | 'edit'

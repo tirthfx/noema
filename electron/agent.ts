@@ -1,9 +1,7 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import type { AgentResult, Artifact, ArtifactResult, CaptureInput, GroundedAnswerResult, NoteProposal, Persona, ProposalResult, ToolCallActivity } from '../shared/types'
 import { resolveCapture } from './capture'
 import { validateArtifact } from './citation-validator'
-import { CHAT_MODEL } from './index'
+import { CHAT_MODEL, readNimApiKey } from './index'
 import { linkNotes } from './tools/link-notes'
 import { listNotes } from './tools/list-notes'
 import { readNote } from './tools/read-note'
@@ -88,24 +86,13 @@ const writeNoteTool = {
 const captureTools = [...readOnlyTools, writeNoteTool] as const
 const GATED_TOOLS = new Set(['write_note', 'link_notes'])
 
-function readApiKey(): string {
-  try {
-    const key = readFileSync(join(process.cwd(), '.env'), 'utf8').match(/^NVIDIA_API_KEY=(.+)$/m)?.[1]?.trim()
-    if (key) return key
-  } catch {
-    // Production builds may not ship a local .env file.
-  }
-  if (process.env.NVIDIA_API_KEY) return process.env.NVIDIA_API_KEY
-  throw new Error('NVIDIA_API_KEY is not configured in the main process.')
-}
-
 async function requestChat(messages: ChatMessage[], activeTools: readonly unknown[] = readOnlyTools): Promise<{ payload?: ChatResponse; raw?: string; error?: string }> {
   let lastError = 'Unknown NIM error.'
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const response = await fetch(NIM_CHAT_URL, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${readApiKey()}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${readNimApiKey()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: CHAT_MODEL, messages, tools: activeTools, tool_choice: 'auto' }),
         signal: AbortSignal.timeout(45_000)
       })
@@ -291,7 +278,10 @@ export async function generateArtifact(vaultPath: string, topic: string, persona
   try {
     const draft = artifactFrom(parseModelJson(result.content))
     if (!draft) throw new Error('shape')
-    return { artifact: await validateArtifact(vaultPath, draft) }
+    const artifact = await validateArtifact(vaultPath, draft)
+    return artifact.claims.length > 0
+      ? { artifact }
+      : { error: 'Noema could not validate any claims in that review. Nothing was rendered as an artifact.', rawResponse: result.content, retryable: true }
   } catch {
     return { error: 'The model did not return a valid literature-review structure. Nothing was rendered as an artifact.', rawResponse: result.content, retryable: true }
   }

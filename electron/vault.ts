@@ -1,5 +1,6 @@
-import { readdir, readFile, stat, mkdir, writeFile } from 'node:fs/promises'
-import { relative, resolve, sep, dirname } from 'node:path'
+import { readdir, readFile, stat, lstat, mkdir, realpath, rename, rm, writeFile } from 'node:fs/promises'
+import { relative, resolve, sep, dirname, basename } from 'node:path'
+import { randomUUID } from 'node:crypto'
 
 export interface VaultNote {
   path: string
@@ -40,7 +41,7 @@ export function resolveVaultPath(vaultPath: string, notePath: string): string | 
 }
 
 export async function readVaultNote(vaultPath: string, notePath: string): Promise<string | null> {
-  const fullPath = resolveVaultPath(vaultPath, notePath)
+  const fullPath = await resolveExistingVaultPath(vaultPath, notePath)
   if (!fullPath || !fullPath.toLowerCase().endsWith('.md')) return null
   try {
     return await readFile(fullPath, 'utf8')
@@ -49,11 +50,51 @@ export async function readVaultNote(vaultPath: string, notePath: string): Promis
   }
 }
 
+/** Resolves an existing path and verifies its real location is inside the vault. */
+export async function resolveExistingVaultPath(vaultPath: string, notePath: string): Promise<string | null> {
+  const candidate = resolveVaultPath(vaultPath, notePath)
+  if (!candidate) return null
+  try {
+    const [root, target] = await Promise.all([realpath(vaultPath), realpath(candidate)])
+    return target === root || target.startsWith(`${root}${sep}`) ? target : null
+  } catch {
+    return null
+  }
+}
+
 export async function writeVaultNote(vaultPath: string, notePath: string, content: string): Promise<void> {
   const fullPath = resolveVaultPath(vaultPath, notePath)
   if (!fullPath || !fullPath.toLowerCase().endsWith('.md')) throw new Error('The proposed path must stay inside the vault and end in .md.')
+  await assertNoSymlinkInWritePath(vaultPath, fullPath)
   await mkdir(dirname(fullPath), { recursive: true })
-  await writeFile(fullPath, content, 'utf8')
+  await assertNoSymlinkInWritePath(vaultPath, fullPath)
+  const temporaryPath = resolve(dirname(fullPath), `.${basename(fullPath)}.${process.pid}.${randomUUID()}.tmp`)
+  try {
+    await writeFile(temporaryPath, content, { encoding: 'utf8', flag: 'wx' })
+    await rename(temporaryPath, fullPath)
+  } finally {
+    await rm(temporaryPath, { force: true }).catch(() => undefined)
+  }
+}
+
+/** Refuse writes through symlinks, which could otherwise escape the chosen vault. */
+async function assertNoSymlinkInWritePath(vaultPath: string, fullPath: string): Promise<void> {
+  const selectedRoot = resolve(vaultPath)
+  const root = await realpath(selectedRoot)
+  const relativePath = relative(selectedRoot, fullPath)
+  let current = root
+  for (const segment of relativePath.split(sep).filter(Boolean)) {
+    current = resolve(current, segment)
+    try {
+      if ((await lstat(current)).isSymbolicLink()) {
+        const error = Object.assign(new Error(`Refusing to write through symbolic link: ${current}`), { code: 'ELOOP' })
+        throw error
+      }
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error && (error as { code?: unknown }).code === 'ENOENT') continue
+      throw error
+    }
+  }
 }
 
 /**
@@ -70,6 +111,7 @@ export function describeWriteFailure(error: unknown, notePath: string): string {
     : code === 'EBUSY' || code === 'ETXTBSY' ? `${notePath} is locked by another program. Close it there, then approve again.`
     : code === 'EISDIR' ? `${notePath} is a folder, not a note file.`
     : code === 'ENAMETOOLONG' ? `That note path is too long for this filesystem: ${notePath}`
+    : code === 'ELOOP' ? `Noema refused to write ${notePath} through a symbolic link outside the vault.`
     : code === 'ENOENT' ? `Noema could not create the folder for ${notePath}. The vault may have moved since you selected it.`
     : `Noema could not write ${notePath}.`
   return code ? `${explanation} (${code}: ${detail})` : `${explanation} (${detail})`

@@ -38,18 +38,32 @@ function readApiKey(): string {
   throw new NimApiError('NVIDIA_API_KEY is not configured in the main process.')
 }
 
+/** Kept in the main process and shared by every NIM call site. */
+export function readNimApiKey(): string {
+  return readApiKey()
+}
+
+function retryDelay(response: Response): Promise<void> {
+  const retryAfter = Number(response.headers.get('retry-after'))
+  const delay = Number.isFinite(retryAfter) && retryAfter > 0
+    ? Math.min(retryAfter * 1_000, 15_000)
+    : 5_000
+  return new Promise((resolve) => setTimeout(resolve, delay))
+}
+
 async function nimFetch(path: string, body: Record<string, unknown>): Promise<Response> {
   let lastError: Error | null = null
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const response = await fetch(`${NIM_BASE_URL}${path}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${readApiKey()}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${readNimApiKey()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(45_000)
       })
       if (response.ok || (response.status < 500 && response.status !== 429)) return response
       lastError = new NimApiError(`NIM request failed with HTTP ${response.status}.`, response.status)
+      if (attempt === 0) await retryDelay(response)
     } catch (error) {
       lastError = error instanceof Error ? error : new Error('NIM request failed.')
     }

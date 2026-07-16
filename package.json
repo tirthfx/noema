@@ -10,6 +10,7 @@
     "build": "npm run typecheck && electron-vite build && electron-builder",
     "build:unpack": "npm run typecheck && electron-vite build && electron-builder --dir",
     "smoke:index": "electron-vite build && node out/main/phase1-smoke.js",
+    "smoke:local": "electron-vite build && node out/main/phase0-smoke.js",
     "smoke:artifact": "electron-vite build && node out/main/phase3-smoke.js",
     "smoke:answer": "electron-vite build && node out/main/phase4-smoke.js",
     "smoke:capture": "electron-vite build && node out/main/phase5-smoke.js",
