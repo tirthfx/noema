@@ -1,0 +1,33 @@
+@import '@fontsource-variable/geist';
+@import '@fontsource/source-serif-4/400.css';
+@import '@fontsource/source-serif-4/600.css';
+@import '@fontsource/jetbrains-mono/400.css';
+
+/* Reading Room — a warm-white study. Light only.
+   Green is the verification signal (citations, confirmed writes).
+   Amber remains the agent-activity signal (tool calls in flight), nowhere else. */
+:root {
+  --bg-wall: #F7F6F2;      /* window ground, sidebar, composer */
+  --bg-panel: #FFFFFF;     /* reading surface, cards, modals */
+  --bg-inset: #F1EFEA;     /* mono blocks, inputs on panel */
+  --bg-scrim: rgb(34 36 42 / 42%);
+
+  --border-subtle: #E4E2DC;
+  --border-strong: #CBC8C0;
+
+  --text-primary: #22242A;
+  --text-secondary: #6E7076;
+  --text-tertiary: #989A9F;
+
+  --accent-green: #31614C;       /* citations, primary actions, verification */
+  --accent-green-soft: #EAF0EC;  /* citation chip / selected nav background */
+  --accent-amber: #B0813B;       /* the agent acting — tool-call pulse only */
+
+  --state-success: #4C7A5C;
+  --state-error: #A94F42;
+  --state-warning: #A87F34;
+
+  --font-ui: 'Geist Variable', 'Helvetica Neue', system-ui, sans-serif;
+  --font-content: 'Source Serif 4', Georgia, serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+}

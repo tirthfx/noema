@@ -1,0 +1,61 @@
+name: Package desktop apps
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'electron/**'
+      - 'src/**'
+      - 'shared/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'electron-builder.yml'
+      - 'electron.vite.config.ts'
+      - '.github/workflows/package.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS packages
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npx electron-vite build
+      - run: npx electron-builder --mac --arm64 --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: noema-macos
+          path: |
+            release/*.dmg
+            release/*.zip
+          if-no-files-found: error
+
+  windows:
+    name: Windows packages
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npx electron-vite build
+      - run: npx electron-builder --win --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: noema-windows
+          path: |
+            release/*.exe
+          if-no-files-found: error

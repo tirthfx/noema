@@ -1,0 +1,36 @@
+appId: com.noema.app
+productName: Noema
+directories:
+  output: release
+files:
+  - out/**
+  - package.json
+extraResources:
+  # ACCEPTED DEMO RISK: this makes the NVIDIA key extractable from every installer.
+  # Keep only for zero-configuration judging; remove it and rotate the key before public release.
+  - .env
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+mac:
+  icon: build/icon.icns
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+    - target: zip
+      arch:
+        - arm64
+        - x64
+  identity: null
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

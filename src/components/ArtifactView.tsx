@@ -1,0 +1,4 @@
+import type { Artifact, ArtifactClaim } from '../../shared/types'
+import Citation from './Citation'
+function Claim({ claim }: { claim: ArtifactClaim }) { return <p className="artifact-claim">{claim.text} {claim.citations.map((citation, index) => <Citation citation={citation} key={`${citation.path}-${index}`} />)}</p> }
+export default function ArtifactView({ artifact }: { artifact: Artifact }) { return <article className="artifact"><h1>{artifact.title}</h1>{artifact.claims.map((claim, index) => <Claim claim={claim} key={index} />)}{artifact.tensions.length > 0 && <section className="tensions"><h2>Tensions &amp; Open Questions</h2>{artifact.tensions.map((tension, index) => <div key={index}><p>{tension.question}</p>{tension.sides.map((side, sideIndex) => <Claim claim={side} key={sideIndex} />)}</div>)}</section>}</article> }
