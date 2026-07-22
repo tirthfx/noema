@@ -29,6 +29,7 @@ A public demo-video link will be added here once the recording is uploaded. The 
 ## Built with
 
 - **GPT-5.6 / Codex** was used to design, implement, test, and package the Electron application. Codex contributed the final submission pass.
+- **Tirth Shendage** contributed the hackathon submission, product direction, and demo refinement.
 - **NVIDIA NIM** runs the app at runtime: `meta/llama-3.1-8b-instruct` powers the agent and `nvidia/llama-nemotron-embed-1b-v2` provides corpus embeddings.
 
 ## Download and run
